@@ -23,20 +23,15 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 const STORAGE_KEY = 'helpdesk-lang'
 
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY) as Locale | null;
-        if (stored === 'en' || stored === 'ar') return stored;
-        const browserLang = navigator.language?.toLowerCase();
-        if (browserLang?.startsWith('ar')) return 'ar';
-      } catch {
-        // Fallback silently if localStorage is restricted
-      }
-    }
-    return 'en';
-  });
+export function LanguageProvider({
+  children,
+  initialLocale,
+}: {
+  children: React.ReactNode
+  /** Resolved on the server from the locale cookie so SSR and hydration render the same language */
+  initialLocale: Locale
+}) {
+  const [locale, setLocaleState] = useState<Locale>(initialLocale)
 
   const dir: Direction = locale === 'ar' ? 'rtl' : 'ltr'
   const isRTL = dir === 'rtl'

@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { summarizeTicket } from '@/lib/gemini'
 import { prisma } from '@/lib/db'
-import { cookies } from 'next/headers'
+import { getSession } from '@/lib/session'
 
 export async function POST(
  req: NextRequest,
  { params }: { params: Promise<{ id: string }> }
 ) {
  try {
- // Auth check
- const cookieStore = await cookies()
- const cookie = cookieStore.get('helpdesk-session')?.value
- if (!cookie) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
- const { decrypt } = await import('@/lib/session')
- const session = await decrypt(cookie)
- if (!session || session.role !== 'IT_SUPPORT') {
+ const session = await getSession()
+ if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+ if (session.role !== 'IT_SUPPORT') {
  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
  }
 

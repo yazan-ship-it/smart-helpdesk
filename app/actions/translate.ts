@@ -1,6 +1,7 @@
 'use server'
 
 import { translateText as translateGemini } from '@/lib/gemini'
+import { getSession } from '@/lib/session'
 
 export type TranslateResult = {
   success: boolean
@@ -15,6 +16,9 @@ export async function translateAction({
   text: string
   targetLanguage: 'Arabic' | 'English'
 }): Promise<TranslateResult> {
+  const session = await getSession()
+  if (!session) return { success: false, error: 'Unauthorized' }
+
   if (!text || !text.trim()) {
     return { success: false, error: 'Text to translate cannot be empty' }
   }

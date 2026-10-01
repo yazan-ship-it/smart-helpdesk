@@ -49,3 +49,5 @@ prisma/dev.db
 # Allow .env.example for reviewers while blocking actual secret envs
 .env*
 !.env.example
+# User-uploaded attachments
+public/uploads/

@@ -1,6 +1,6 @@
 /**
  * Smart IT Helpdesk — Test Suite
- * Tests: login, ticket creation, role auth, status lifecycle, data isolation
+ * Tests: login, ticket creation, role auth, status lifecycle, data isolation, API auth & uploads
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
@@ -12,9 +12,18 @@ import bcrypt from 'bcryptjs'
 vi.mock('@/lib/session', () => ({ getSession: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
+vi.mock('@/lib/gemini', () => ({ triageTicket: vi.fn(), translateText: vi.fn(), summarizeTicket: vi.fn() }))
 
+import { unlink } from 'fs/promises'
+import path from 'path'
+import { NextRequest } from 'next/server'
 import { getSession, type Role, type SessionPayload } from '@/lib/session'
+import { triageTicket, translateText } from '@/lib/gemini'
 import { getTicketDetails } from '@/app/actions/tickets'
+import { translateAction } from '@/app/actions/translate'
+import { POST as uploadPOST } from '@/app/api/upload/route'
+import { POST as triagePOST } from '@/app/api/ai/triage/route'
+import { POST as translatePOST } from '@/app/api/ai/translate/route'
 
 function signInAs(userId: string, role: Role) {
   vi.mocked(getSession).mockResolvedValue({ userId, role } as SessionPayload)
@@ -361,5 +370,90 @@ describe('Test 5: Data Isolation', () => {
     signInAs(itSupportId, 'IT_SUPPORT')
     const ticket = await getTicketDetails(otherTicketId)
     expect(ticket?.id).toBe(otherTicketId)
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 6: API Authentication & Upload Safety
+// ────────────────────────────────────────────────────────
+describe('Test 6: API Authentication & Upload Safety', () => {
+  const signedOut = () => vi.mocked(getSession).mockResolvedValue(null)
+
+  function uploadRequest(...files: File[]) {
+    const formData = new FormData()
+    files.forEach((f) => formData.append('files', f))
+    return new NextRequest('http://localhost/api/upload', { method: 'POST', body: formData })
+  }
+
+  function jsonRequest(url: string, body: unknown) {
+    return new NextRequest(url, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  it('upload rejects unauthenticated requests', async () => {
+    signedOut()
+    const res = await uploadPOST(uploadRequest(new File(['x'], 'a.png', { type: 'image/png' })))
+    expect(res.status).toBe(401)
+  })
+
+  it('upload rejects HTML and SVG files that browsers would execute', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    for (const name of ['evil.html', 'evil.svg', 'evil.js', 'evil.png.html', 'noext']) {
+      const res = await uploadPOST(uploadRequest(new File(['<script>alert(1)</script>'], name, { type: 'image/png' })))
+      expect(res.status, name).toBe(400)
+    }
+  })
+
+  it('upload rejects files larger than 10 MB', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const big = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'big.pdf', { type: 'application/pdf' })
+    const res = await uploadPOST(uploadRequest(big))
+    expect(res.status).toBe(413)
+  })
+
+  it('upload rejects more than 5 files at once', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const files = Array.from({ length: 6 }, (_, i) => new File(['x'], `f${i}.txt`, { type: 'text/plain' }))
+    const res = await uploadPOST(uploadRequest(...files))
+    expect(res.status).toBe(400)
+  })
+
+  it('upload stores an allowed file under a random name with the server-side type', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const res = await uploadPOST(uploadRequest(new File(['png-bytes'], 'Screen Shot.PNG', { type: 'text/html' })))
+    expect(res.status).toBe(200)
+    const { attachments } = await res.json()
+    expect(attachments).toHaveLength(1)
+    expect(attachments[0].name).toBe('Screen Shot.PNG')
+    expect(attachments[0].type).toBe('image/png') // not the client-claimed text/html
+    expect(attachments[0].url).toMatch(/^\/uploads\/[0-9a-f-]{36}\.png$/)
+    await unlink(path.join(process.cwd(), 'public', attachments[0].url))
+  })
+
+  it('AI triage route rejects unauthenticated requests without calling Gemini', async () => {
+    signedOut()
+    vi.mocked(triageTicket).mockClear()
+    const res = await triagePOST(jsonRequest('http://localhost/api/ai/triage', { title: 'VPN down', description: 'x' }))
+    expect(res.status).toBe(401)
+    expect(triageTicket).not.toHaveBeenCalled()
+  })
+
+  it('AI translate route rejects unauthenticated requests without calling Gemini', async () => {
+    signedOut()
+    vi.mocked(translateText).mockClear()
+    const res = await translatePOST(jsonRequest('http://localhost/api/ai/translate', { text: 'hello', targetLanguage: 'Arabic' }))
+    expect(res.status).toBe(401)
+    expect(translateText).not.toHaveBeenCalled()
+  })
+
+  it('translateAction rejects unauthenticated callers without calling Gemini', async () => {
+    signedOut()
+    vi.mocked(translateText).mockClear()
+    const result = await translateAction({ text: 'hello', targetLanguage: 'Arabic' })
+    expect(result.success).toBe(false)
+    expect(translateText).not.toHaveBeenCalled()
   })
 })

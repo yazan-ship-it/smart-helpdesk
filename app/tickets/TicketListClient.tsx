@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef, Suspense } from 'react'
+import { useState, useMemo, useEffect, useRef, useSyncExternalStore, Suspense } from 'react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -35,7 +35,6 @@ import {
  User,
  Filter,
  BarChart2,
- UserCheck,
   Layers,
  XCircle,
  Sparkles,
@@ -229,19 +228,22 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  const [dateRangeFilter, setDateRangeFilter] = useState<string>('all') // all, today, week, month
  const [assignedToMeFilter, setAssignedToMeFilter] = useState<boolean>(initAssignedToMe)
  const [showFilters, setShowFilters] = useState(false)
- const [mounted, setMounted] = useState(false)
  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
  const searchInputRef = useRef<HTMLInputElement>(null)
 
- useEffect(() => { setMounted(true) }, [])
+ // true on the client, false during SSR — keeps the chart out of the server render
+ const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
 
- useEffect(() => {
+ // Re-sync filters when the URL changes (adjusting state during render instead of in an effect)
+ const [prevSearchParams, setPrevSearchParams] = useState(searchParams)
+ if (searchParams !== prevSearchParams) {
+ setPrevSearchParams(searchParams)
  setStatusFilter(searchParams?.get('status') || '')
  setPriorityFilter(searchParams?.get('priority') || '')
  setCategoryFilter(searchParams?.get('category') || '')
  setAgentFilter(searchParams?.get('agent') || '')
  setAssignedToMeFilter(searchParams?.get('queue') === 'assigned_to_me' || searchParams?.get('assignedToMe') === 'true')
- }, [searchParams])
+ }
 
  useEffect(() => {
  const handleKeyDown = (e: KeyboardEvent) => {
@@ -1128,7 +1130,7 @@ function StatCard({
  className="stat-card"
  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
  >
- <div style={{ background: iconBg, color: iconColor }} className="stat-icon">
+ <div style={{ background: iconBg, color: iconColor }} className={`stat-icon${pulse ? ' animate-pulse' : ''}`}>
  {icon}
  </div>
  <div>

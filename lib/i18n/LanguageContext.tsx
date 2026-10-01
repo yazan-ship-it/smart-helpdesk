@@ -81,10 +81,10 @@ export function LanguageProvider({
       
       // Helper to traverse object
       const resolveKey = (dict: unknown): unknown => {
-        let current: any = dict
+        let current = dict
         for (const k of keys) {
           if (current && typeof current === 'object' && k in current) {
-            current = current[k]
+            current = (current as Record<string, unknown>)[k]
           } else {
             return undefined
           }

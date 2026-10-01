@@ -1,4 +1,4 @@
-export function formatRelativeTime(dateStr: string, locale: 'en' | 'ar' = 'en'): string {
+export function formatRelativeTime(dateStr: string | Date, locale: 'en' | 'ar' = 'en'): string {
   const date = new Date(dateStr)
   const now = new Date()
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)

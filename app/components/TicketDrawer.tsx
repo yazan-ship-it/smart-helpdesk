@@ -1,18 +1,20 @@
 'use client'
 
-import { useState, useEffect, useTransition, useRef } from 'react'
+import { useState, useEffect, useEffectEvent, useTransition, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ExternalLink, MessageSquare, Clock, User, AlertTriangle, CheckCircle2, ChevronRight, Send, AlertCircle, RefreshCw, Zap, Sparkles, Layers } from 'lucide-react'
+import { X, ExternalLink, MessageSquare, Clock, User, AlertTriangle, Send, RefreshCw, Sparkles, Layers } from 'lucide-react'
 import { formatRelativeTime } from '@/lib/utils'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { getTicketDetails, updateTicketStatus, addComment, takeOverTicket } from '@/app/actions/tickets'
 import confetti from 'canvas-confetti'
+import { useIsClient } from '@/lib/useIsClient'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
 import AiTranslateButton from '@/app/components/AiTranslateButton'
 
 type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+type TicketDetails = NonNullable<Awaited<ReturnType<typeof getTicketDetails>>>
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 
 const VALID_TRANSITIONS: Record<Status, Status[]> = {
@@ -60,17 +62,19 @@ export default function TicketDrawer({
   onClose: () => void
   currentUserId: string
 }) {
-  const { t, locale, isRTL } = useTranslation()
-  const [ticket, setTicket] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  const { locale, isRTL } = useTranslation()
+  const [ticket, setTicket] = useState<TicketDetails | null>(null)
+  // Id of the ticket whose fetch has finished; a spinner shows until it matches ticketId
+  const [loadedId, setLoadedId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [commentText, setCommentText] = useState('')
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  // createPortal needs document, so render nothing during SSR
+  const mounted = useIsClient()
+  const loading = isOpen && !!ticketId && loadedId !== ticketId
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // Forget the loaded ticket when the drawer closes so reopening it shows the spinner again
+  if (!isOpen && loadedId !== null) setLoadedId(null)
 
   useEffect(() => {
     if (ticket?.id) {
@@ -78,38 +82,54 @@ export default function TicketDrawer({
     }
   }, [ticket?.id])
 
+  const onLoadFailed = useEffectEvent((reason: 'not-found' | 'error') => {
+    if (reason === 'not-found') {
+      toast.error(locale === 'ar' ? 'تعذر العثور على التذكرة أو ليس لديك صلاحية' : 'Ticket not found or unauthorized')
+    } else {
+      toast.error(locale === 'ar' ? 'فشل تحميل تفاصيل التذكرة' : 'Failed to load ticket details')
+    }
+    onClose()
+  })
+
   useEffect(() => {
-    if (isOpen && ticketId) {
-      setLoading(true)
-      getTicketDetails(ticketId).then((data) => {
-        if (!data) {
-          toast.error(locale === 'ar' ? 'تعذر العثور على التذكرة أو ليس لديك صلاحية' : 'Ticket not found or unauthorized')
-          setLoading(false)
-          onClose()
-          return
-        }
+    if (!isOpen || !ticketId) return
+    let cancelled = false
+    getTicketDetails(ticketId)
+      .then((data) => {
+        if (cancelled) return
+        if (!data) return onLoadFailed('not-found')
         setTicket(data)
-        setLoading(false)
-      }).catch((err) => {
-        toast.error(locale === 'ar' ? 'فشل تحميل تفاصيل التذكرة' : 'Failed to load ticket details')
-        setLoading(false)
+        setLoadedId(ticketId)
       })
+      .catch(() => {
+        if (!cancelled) onLoadFailed('error')
+      })
+    return () => {
+      cancelled = true
     }
   }, [isOpen, ticketId])
+
+  const refreshTicket = async (id: string) => {
+    const updated = await getTicketDetails(id)
+    if (updated) setTicket(updated)
+  }
 
   const handleStatusTransition = async (nextStatus: Status) => {
     if (!ticket) return
     startTransition(async () => {
       try {
-        await updateTicketStatus(ticket.id, nextStatus)
+        const result = await updateTicketStatus(ticket.id, nextStatus)
+        if (result?.error) {
+          toast.error(result.error)
+          return
+        }
         toast.success(locale === 'ar' ? `تم تحديث حالة التذكرة إلى ${getStatusLabel(nextStatus, locale)}` : `Ticket marked as ${nextStatus}`)
         if (nextStatus === 'RESOLVED') {
           confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
         }
-        const updated = await getTicketDetails(ticket.id)
-        setTicket(updated)
-      } catch (err: any) {
-        toast.error(err.message || (locale === 'ar' ? 'فشل تحديث الحالة' : 'Failed to update status'))
+        await refreshTicket(ticket.id)
+      } catch (err) {
+        toast.error((err instanceof Error && err.message) || (locale === 'ar' ? 'فشل تحديث الحالة' : 'Failed to update status'))
       }
     })
   }
@@ -118,12 +138,15 @@ export default function TicketDrawer({
     if (!ticket) return
     startTransition(async () => {
       try {
-        await takeOverTicket(ticket.id)
+        const result = await takeOverTicket(ticket.id)
+        if (result?.error) {
+          toast.error(result.error)
+          return
+        }
         toast.success(locale === 'ar' ? 'لقد استلمت هذه التذكرة بنجاح.' : 'You have taken over this ticket.')
-        const updated = await getTicketDetails(ticket.id)
-        setTicket(updated)
-      } catch (err: any) {
-        toast.error(err.message || (locale === 'ar' ? 'فشل استلام التذكرة' : 'Failed to take over ticket'))
+        await refreshTicket(ticket.id)
+      } catch (err) {
+        toast.error((err instanceof Error && err.message) || (locale === 'ar' ? 'فشل استلام التذكرة' : 'Failed to take over ticket'))
       }
     })
   }
@@ -134,13 +157,16 @@ export default function TicketDrawer({
 
     startTransition(async () => {
       try {
-        await addComment(ticket.id, commentText)
+        const result = await addComment(ticket.id, commentText)
+        if (result?.error) {
+          toast.error(result.error)
+          return
+        }
         toast.success(locale === 'ar' ? 'تمت إضافة التعليق بنجاح' : 'Comment added')
         setCommentText('')
-        const updated = await getTicketDetails(ticket.id)
-        setTicket(updated)
-      } catch (err: any) {
-        toast.error(err.message || (locale === 'ar' ? 'فشل إضافة التعليق' : 'Failed to add comment'))
+        await refreshTicket(ticket.id)
+      } catch (err) {
+        toast.error((err instanceof Error && err.message) || (locale === 'ar' ? 'فشل إضافة التعليق' : 'Failed to add comment'))
       }
     })
   }
@@ -206,10 +232,10 @@ export default function TicketDrawer({
                       <Layers className="w-3.5 h-3.5" />
                       {getCategoryLabel(ticket.category, locale)}
                     </span>
-                    <span className={priorityBadgeClass(ticket.priority)}>
+                    <span className={priorityBadgeClass(ticket.priority as Priority)}>
                       {getPriorityLabel(ticket.priority, locale)}
                     </span>
-                    <span className={statusBadgeClass(ticket.status)}>
+                    <span className={statusBadgeClass(ticket.status as Status)}>
                       <span className="badge-dot" />
                       {getStatusLabel(ticket.status, locale)}
                     </span>
@@ -269,7 +295,7 @@ export default function TicketDrawer({
                     </div>
 
                     {/* Comments */}
-                    {ticket.comments?.map((comment: any) => {
+                    {ticket.comments?.map((comment) => {
                       const isIT = comment.author?.role !== 'EMPLOYEE'
                       return (
                         <div key={comment.id} className="flex gap-4">

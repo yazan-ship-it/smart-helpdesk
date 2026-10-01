@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { summarizeTicket } from '@/lib/gemini'
 import { prisma } from '@/lib/db'
-import { getSession } from '@/lib/session'
 import { cookies } from 'next/headers'
 
 export async function POST(

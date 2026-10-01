@@ -110,7 +110,7 @@ export default function TicketFlowSimulator() {
               </div>
               
               <blockquote className="border-l-2 border-indigo-500/50 pl-4 py-1 text-sm italic text-slate-600 dark:text-muted-foreground bg-muted/20 rounded-r-lg">
-                "{activeScenario.desc}"
+                &ldquo;{activeScenario.desc}&rdquo;
               </blockquote>
 
               <div className="flex flex-wrap items-center gap-2 mt-1">

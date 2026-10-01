@@ -51,7 +51,7 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <SettingsClient initialSettings={initialSettings} agents={agents as any} />
+      <SettingsClient initialSettings={initialSettings} agents={agents} />
     </div>
   )
 }

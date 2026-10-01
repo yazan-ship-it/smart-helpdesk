@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { updateSettings, updateAgentSkills } from '@/app/actions/settings'
 import { Loader2, Save, Layout, Clock, FolderGit2, Sparkles, MessageSquare, Plus, Trash2, X, UserCog } from 'lucide-react'
 import type { AppSettings } from '@prisma/client'
-import { useTranslation, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
+import { useTranslation, getPriorityLabel } from '@/lib/i18n'
 
 type Agent = {
   id: string
@@ -49,7 +49,7 @@ const DAYS_TRANSLATIONS: Record<string, string> = {
 const DAYS_OF_WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 export default function SettingsClient({ initialSettings, agents }: Props) {
-  const { t, locale, isRTL } = useTranslation()
+  const { locale } = useTranslation()
   const [isPending, startTransition] = useTransition()
   const [activeTab, setActiveTab] = useState('general')
 
@@ -361,7 +361,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                           : 'bg-[var(--bg-base)] text-muted-foreground border-border hover:border-primary/50'
                       }`}
                     >
-                      {day.substring(0, 3)}
+                      {locale === 'ar' ? DAYS_TRANSLATIONS[day] : day.substring(0, 3)}
                     </button>
                   ))}
                 </div>

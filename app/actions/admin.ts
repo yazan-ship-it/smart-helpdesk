@@ -1,5 +1,7 @@
 'use server'
 
+import { randomBytes } from 'crypto'
+import bcrypt from 'bcryptjs'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
 import { requireAdmin } from '@/app/actions/auth'
@@ -91,13 +93,10 @@ export async function updateUserRole(
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return { error: 'User not found.' }
 
-  const dataToUpdate: any = { role }
-  
-  if (role === 'IT_SUPPORT') {
-    const sanitised = skills.filter((s) => VALID_SKILLS.includes(s))
-    dataToUpdate.skills = JSON.stringify(sanitised)
-  } else {
-    dataToUpdate.skills = '[]' // Clear skills if not IT Support
+  const dataToUpdate = {
+    role,
+    // Clear skills if not IT Support
+    skills: role === 'IT_SUPPORT' ? JSON.stringify(skills.filter((s) => VALID_SKILLS.includes(s))) : '[]',
   }
 
   await prisma.user.update({
@@ -126,9 +125,7 @@ export async function inviteUser(
   }
 
   // Generate a random temporary password since password is required
-  const crypto = require('crypto')
-  const tempPassword = crypto.randomBytes(16).toString('hex')
-  const bcrypt = require('bcryptjs')
+  const tempPassword = randomBytes(16).toString('hex')
   const hashedPassword = await bcrypt.hash(tempPassword, 12)
 
   await prisma.user.create({

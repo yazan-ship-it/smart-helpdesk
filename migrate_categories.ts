@@ -31,7 +31,7 @@ async function main() {
             data: { skills: JSON.stringify(updatedSkills) },
           })
         }
-      } catch (e) {
+      } catch {
         console.error('Failed to parse skills for user', user.id)
       }
     }

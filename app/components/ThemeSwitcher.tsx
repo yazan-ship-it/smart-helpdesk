@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import { Sun, Moon, Monitor, Palette, Check } from 'lucide-react'
+import { useIsClient } from '@/lib/useIsClient'
 import { useTranslation } from '@/lib/i18n'
 
 type AccentColor = 'blue' | 'slate' | 'violet' | 'emerald'
@@ -23,16 +24,13 @@ const MODE_OPTIONS = [
 export default function ThemeSwitcher({ placement = 'top' }: { placement?: 'top' | 'bottom' }) {
   const { theme, setTheme } = useTheme()
   const { locale } = useTranslation()
-  const [accent, setAccent] = useState<AccentColor>('blue')
+  const [accent, setAccent] = useState<AccentColor>(() =>
+    (typeof window !== 'undefined' && (localStorage.getItem('helpdesk-accent') as AccentColor | null)) || 'blue'
+  )
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  // next-themes only knows the theme on the client
+  const mounted = useIsClient()
   const panelRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    setMounted(true)
-    const stored = localStorage.getItem('helpdesk-accent') as AccentColor | null
-    if (stored) setAccent(stored)
-  }, [])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

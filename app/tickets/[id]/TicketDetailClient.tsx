@@ -9,13 +9,11 @@ import {
  ArrowLeft,
  Clock,
  CheckCircle2,
- AlertTriangle,
  Send,
  Calendar,
  Shield,
  Activity,
  MessageSquare,
- History,
  Paperclip,
  ExternalLink,
  Copy,
@@ -208,7 +206,7 @@ export default function TicketDetailClient({
   currentUserRole,
 }: Props) {
  const router = useRouter()
-  const { t, locale, isRTL } = useTranslation()
+  const { locale } = useTranslation()
  const [commentText, setCommentText] = useState('')
  const [isInternalNote, setIsInternalNote] = useState(false)
  const [activeTab, setActiveTab] = useState<'all' | 'comments' | 'history'>('all')
@@ -227,7 +225,6 @@ export default function TicketDetailClient({
   const isAdmin = currentUserRole === 'ADMIN'
   const isITSupport = currentUserRole === 'IT_SUPPORT' || isAdmin
   const isAssignedToPeer = isITSupport && !isAdmin && Boolean(ticket.assignedToId) && ticket.assignedToId !== currentUserId
-  const isAssignedToMe = isITSupport && ticket.assignedToId === currentUserId
   const isUnassigned = isITSupport && !ticket.assignedToId
 
   const [isPendingTakeOver, startTransitionTakeOver] = useTransition()
@@ -769,6 +766,7 @@ export default function TicketDetailClient({
  >
  <div className="w-9 h-9 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0 text-muted-foreground group-hover:text-indigo-700 dark:text-indigo-400 transition-colors overflow-hidden">
  {isImg ? (
+ // eslint-disable-next-line @next/next/no-img-element -- tiny thumbnail of a user upload with unknown dimensions
  <img
  src={file.url}
  alt={file.name}

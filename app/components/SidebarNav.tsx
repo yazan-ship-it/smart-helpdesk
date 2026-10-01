@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Users, Shield, Settings, AlertCircle, Clock, User, CheckCircle2 } from 'lucide-react'
+import { Users, Shield, Settings, AlertCircle, User, CheckCircle2 } from 'lucide-react'
 import { useTranslation } from '@/lib/i18n'
 
 // Define the types from the Prisma queries passed down
@@ -33,7 +33,7 @@ export default function SidebarNav({
   slaBreaches = []
 }: SidebarNavProps) {
   const pathname = usePathname()
-  const { t, locale, isRTL } = useTranslation()
+  const { t, locale } = useTranslation()
 
   const items = [
     { href: '/admin/users', label: t('nav.userManagement'), icon: Users },

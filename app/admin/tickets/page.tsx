@@ -5,10 +5,7 @@ import TicketListClient from '@/app/tickets/TicketListClient'
 
 export const metadata = { title: 'All Tickets | Admin' }
 
-export default async function AdminTicketsPage(props: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-  const searchParams = await props.searchParams
+export default async function AdminTicketsPage() {
   const session = await getSession()
   
   if (!session || session.role !== 'ADMIN') {
@@ -24,7 +21,7 @@ export default async function AdminTicketsPage(props: {
     orderBy: { createdAt: 'desc' },
   })
 
-  let agents: { id: string; name: string }[] = await prisma.user.findMany({
+  const agents: { id: string; name: string }[] = await prisma.user.findMany({
     where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
     select: { id: true, name: true },
   })

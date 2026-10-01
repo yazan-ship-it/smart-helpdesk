@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Sparkles, Loader2, Globe, EyeOff, RotateCcw } from 'lucide-react'
+import { Sparkles, Loader2, EyeOff, RotateCcw } from 'lucide-react'
 import { translateAction } from '@/app/actions/translate'
 import { useTranslation } from '@/lib/i18n'
 

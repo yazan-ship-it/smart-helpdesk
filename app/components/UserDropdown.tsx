@@ -20,7 +20,7 @@ export default function UserDropdown({ user, placement = 'bottom-end' }: Props) 
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const { theme, setTheme } = useTheme()
-  const { t, locale, setLocale, toggleLanguage, isRTL } = useTranslation()
+  const { t, locale, setLocale } = useTranslation()
 
   // Close dropdown on click outside
   useEffect(() => {

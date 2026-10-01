@@ -18,12 +18,11 @@ import {
  Wand2,
  Check,
  ShieldAlert,
- HelpCircle,
  RotateCcw,
  ChevronDown,
 } from 'lucide-react'
 import { createTicket, type TicketState } from '@/app/actions/tickets'
-import { useTranslation, getCategoryLabel, getPriorityLabel } from '@/lib/i18n'
+import { useTranslation } from '@/lib/i18n'
 
 
 
@@ -255,7 +254,7 @@ const DEMO_SCENARIOS = [
 ]
 
 export default function NewTicketClient({ categories }: { categories: string[] }) {
- const { t, locale, isRTL } = useTranslation()
+ const { locale } = useTranslation()
   const [state, action, pending] = useActionState<TicketState, FormData>(createTicket, undefined)
  const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -668,6 +667,7 @@ export default function NewTicketClient({ categories }: { categories: string[] }
  className="flex items-center gap-3 p-2.5 rounded-xl bg-background/80 border border-border"
  >
  {att.preview ? (
+ // eslint-disable-next-line @next/next/no-img-element -- local blob: preview, next/image can't optimize it
  <img
  src={att.preview}
  alt={att.name}

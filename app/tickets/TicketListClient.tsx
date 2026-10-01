@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef, useSyncExternalStore, Suspense } from 'react'
+import { useState, useMemo, useEffect, useRef, Suspense } from 'react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -9,6 +9,7 @@ import { formatRelativeTime } from '@/lib/utils'
 import EmptyState from '@/app/components/EmptyState'
 import TicketDrawer from '@/app/components/TicketDrawer'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useIsClient } from '@/lib/useIsClient'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
 import {
  ResponsiveContainer,
@@ -183,7 +184,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
 }
 
  function TicketListClientContent({ tickets, role, currentUserId, totalTicketCount, assignedToMeCount, activeQueue, agents, isAdminView }: Props) {
-  const { t, locale, isRTL } = useTranslation()
+  const { t, locale } = useTranslation()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -231,8 +232,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
  const searchInputRef = useRef<HTMLInputElement>(null)
 
- // true on the client, false during SSR — keeps the chart out of the server render
- const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
+ const mounted = useIsClient()
 
  // Re-sync filters when the URL changes (adjusting state during render instead of in an effect)
  const [prevSearchParams, setPrevSearchParams] = useState(searchParams)
@@ -885,7 +885,6 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
       {['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'].map((step, idx) => {
         const statuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
         const ticketIdx = statuses.indexOf(ticket.status);
-        const isActive = idx === ticketIdx;
         const isPast = idx <= ticketIdx;
         return (
           <div key={step} className="flex-1 h-1.5 rounded-full transition-colors" style={{

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { getSession } from '@/lib/session'
-import { autoAssignTicket, resolveAutoAssignment } from '@/lib/services/assignment'
+import { resolveAutoAssignment, type DispatchResult } from '@/lib/services/assignment'
 import { calculateBusinessHoursDeadline } from '@/lib/sla'
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -67,7 +67,7 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
   const autoAssign = formData.get('autoAssign') === 'true'
 
   // 🚀 Skill-Based Auto-Dispatch Matrix
-  let dispatch: any = { assigned: false, assignedToId: null, status: 'OPEN' }
+  let dispatch: DispatchResult = { assigned: false, assignedToId: null, status: 'OPEN' }
   if (autoAssign) {
     dispatch = await resolveAutoAssignment(category)
   }

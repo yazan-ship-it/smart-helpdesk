@@ -1,358 +1,379 @@
 /**
  * Smart IT Helpdesk — Test Suite
- * Tests: login, ticket creation, role auth, status lifecycle, data isolation, API auth & uploads
+ *
+ * Every test calls the real server actions, pages and route handlers against the
+ * database. Only the Next.js request context (session cookie, redirect, notFound,
+ * revalidatePath) and the Gemini client are stubbed.
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
-// Server actions read the session from Next.js cookies; stub it so the real
-// actions can be called directly from tests.
-vi.mock('@/lib/session', () => ({ getSession: vi.fn() }))
+// Server code reads the session from Next.js cookies; stub it so tests can pick the user.
+vi.mock('@/lib/session', () => ({ getSession: vi.fn(), createSession: vi.fn(), deleteSession: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
-vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
+// Like the real ones, redirect() and notFound() throw to stop the action.
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error(`NEXT_REDIRECT ${url}`)
+  }),
+  notFound: vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND')
+  }),
+}))
 vi.mock('@/lib/gemini', () => ({ triageTicket: vi.fn(), translateText: vi.fn(), summarizeTicket: vi.fn() }))
+// Pages are called directly; their client components only receive props.
+vi.mock('@/app/tickets/TicketListClient', () => ({ default: () => null }))
+vi.mock('@/app/tickets/[id]/TicketDetailClient', () => ({ default: () => null }))
 
 import { unlink } from 'fs/promises'
 import path from 'path'
+import type { ReactElement } from 'react'
 import { NextRequest } from 'next/server'
-import { getSession, type Role, type SessionPayload } from '@/lib/session'
+import { getSession, createSession, type Role, type SessionPayload } from '@/lib/session'
 import { triageTicket, translateText } from '@/lib/gemini'
-import { getTicketDetails } from '@/app/actions/tickets'
+import { login } from '@/app/actions/auth'
+import {
+  createTicket,
+  updateTicketStatus,
+  assignTicket,
+  takeOverTicket,
+  reassignTicket,
+  addComment,
+  getTicketDetails,
+} from '@/app/actions/tickets'
+import { updateUserRole, updateUserStatus } from '@/app/actions/admin'
 import { translateAction } from '@/app/actions/translate'
+import TicketsPage from '@/app/tickets/page'
+import TicketDetailPage from '@/app/tickets/[id]/page'
 import { POST as uploadPOST } from '@/app/api/upload/route'
 import { POST as triagePOST } from '@/app/api/ai/triage/route'
 import { POST as translatePOST } from '@/app/api/ai/translate/route'
 
-function signInAs(userId: string, role: Role) {
-  vi.mocked(getSession).mockResolvedValue({ userId, role } as SessionPayload)
-}
-
 const prisma = new PrismaClient()
 
 // ─── Test Data ────────────────────────────────────────
+const PASSWORD = 'testpass123'
+const stamp = Date.now()
+const employeeEmail = `test-employee-${stamp}@test.com`
+const itSupportEmail = `test-it-${stamp}@test.com`
+const pendingEmail = `test-pending-${stamp}@test.com`
+
 let employeeId: string
 let itSupportId: string
-let testTicketId: string
-let testTicketNumber: number
+let itPeerId: string
+const testUserIds: string[] = []
 
-// ─── Status machine rules (mirrors server action logic) ───
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  OPEN: ['ASSIGNED'],
-  ASSIGNED: ['IN_PROGRESS'],
-  IN_PROGRESS: ['RESOLVED'],
-  RESOLVED: ['CLOSED'],
-  CLOSED: [],
+function signInAs(userId: string, role: Role, name = 'Test User') {
+  vi.mocked(getSession).mockResolvedValue({ userId, role, name } as SessionPayload)
 }
 
-function isValidTransition(from: string, to: string): boolean {
-  return VALID_TRANSITIONS[from]?.includes(to) ?? false
+function signedOut() {
+  vi.mocked(getSession).mockResolvedValue(null)
+}
+
+async function createUser(name: string, email: string, role: Role, accountStatus = 'APPROVED') {
+  const user = await prisma.user.create({
+    data: { name, email, role, accountStatus, password: await bcrypt.hash(PASSWORD, 4) },
+  })
+  testUserIds.push(user.id)
+  return user.id
+}
+
+async function createTestTicket(createdById: string, data: { status?: string; assignedToId?: string } = {}) {
+  const last = await prisma.ticket.findFirst({ orderBy: { ticketNumber: 'desc' }, select: { ticketNumber: true } })
+  const ticket = await prisma.ticket.create({
+    data: {
+      ticketNumber: (last?.ticketNumber ?? 0) + 1,
+      title: 'Test ticket',
+      description: 'Test ticket description',
+      category: 'Network',
+      priority: 'MEDIUM',
+      createdById,
+      ...data,
+    },
+  })
+  return ticket.id
+}
+
+async function statusOf(ticketId: string) {
+  return (await prisma.ticket.findUnique({ where: { id: ticketId } }))?.status
+}
+
+function form(fields: Record<string, string>) {
+  const fd = new FormData()
+  for (const [k, v] of Object.entries(fields)) fd.set(k, v)
+  return fd
 }
 
 // ─── Setup & Teardown ─────────────────────────────────
 beforeAll(async () => {
-  // Create isolated test users
-  const emp = await prisma.user.create({
-    data: {
-      name: 'Test Employee',
-      email: `test-employee-${Date.now()}@test.com`,
-      password: await bcrypt.hash('testpass123', 12),
-      role: 'EMPLOYEE',
-    },
-  })
-  employeeId = emp.id
-
-  const it = await prisma.user.create({
-    data: {
-      name: 'Test IT Support',
-      email: `test-it-${Date.now()}@test.com`,
-      password: await bcrypt.hash('testpass123', 12),
-      role: 'IT_SUPPORT',
-    },
-  })
-  itSupportId = it.id
+  employeeId = await createUser('Test Employee', employeeEmail, 'EMPLOYEE')
+  itSupportId = await createUser('Test IT Support', itSupportEmail, 'IT_SUPPORT')
+  itPeerId = await createUser('Test IT Peer', `test-it-peer-${stamp}@test.com`, 'IT_SUPPORT')
+  await createUser('Test Pending', pendingEmail, 'EMPLOYEE', 'PENDING')
 })
 
 afterAll(async () => {
-  // Clean up test data
-  await prisma.ticketHistory.deleteMany({ where: { userId: { in: [employeeId, itSupportId] } } })
-  await prisma.comment.deleteMany({ where: { authorId: { in: [employeeId, itSupportId] } } })
-  await prisma.ticket.deleteMany({ where: { createdById: employeeId } })
-  await prisma.user.deleteMany({ where: { id: { in: [employeeId, itSupportId] } } })
+  // Tickets cascade to their comments and history
+  await prisma.ticket.deleteMany({ where: { createdById: { in: testUserIds } } })
+  await prisma.ticketHistory.deleteMany({ where: { userId: { in: testUserIds } } })
+  await prisma.comment.deleteMany({ where: { authorId: { in: testUserIds } } })
+  await prisma.user.deleteMany({ where: { id: { in: testUserIds } } })
   await prisma.$disconnect()
 })
 
 // ────────────────────────────────────────────────────────
-// TEST 1: User Login — credential validation
+// TEST 1: User Login — the real login action
 // ────────────────────────────────────────────────────────
 describe('Test 1: User Login', () => {
-  it('should find employee user by email', async () => {
-    const user = await prisma.user.findUnique({
-      where: { id: employeeId },
+  it('valid credentials create a session for the user and redirect to their tickets', async () => {
+    vi.mocked(createSession).mockClear()
+    await expect(login(undefined, form({ email: employeeEmail, password: PASSWORD }))).rejects.toThrow(
+      /^NEXT_REDIRECT \/tickets$/
+    )
+    expect(createSession).toHaveBeenCalledWith({
+      userId: employeeId,
+      role: 'EMPLOYEE',
+      name: 'Test Employee',
+      email: employeeEmail,
     })
-    expect(user).not.toBeNull()
-    expect(user?.role).toBe('EMPLOYEE')
-    expect(user?.email).toContain('@test.com')
-  })
-
-  it('should validate correct password', async () => {
     const user = await prisma.user.findUnique({ where: { id: employeeId } })
-    expect(user).not.toBeNull()
-    const passwordMatch = await bcrypt.compare('testpass123', user!.password)
-    expect(passwordMatch).toBe(true)
+    expect(user?.lastLoginAt).not.toBeNull()
   })
 
-  it('should reject incorrect password', async () => {
-    const user = await prisma.user.findUnique({ where: { id: employeeId } })
-    expect(user).not.toBeNull()
-    const passwordMatch = await bcrypt.compare('wrongpassword', user!.password)
-    expect(passwordMatch).toBe(false)
+  it('IT_SUPPORT is redirected to their assigned queue', async () => {
+    await expect(login(undefined, form({ email: itSupportEmail, password: PASSWORD }))).rejects.toThrow(
+      'NEXT_REDIRECT /tickets?queue=assigned_to_me'
+    )
   })
 
-  it('should return null for non-existent email', async () => {
-    const user = await prisma.user.findUnique({
-      where: { email: 'nonexistent-user-xyz@test.com' },
-    })
-    expect(user).toBeNull()
+  it('wrong password is rejected without creating a session', async () => {
+    vi.mocked(createSession).mockClear()
+    const result = await login(undefined, form({ email: employeeEmail, password: 'wrongpassword' }))
+    expect(result).toEqual({ error: 'Invalid email or password.' })
+    expect(createSession).not.toHaveBeenCalled()
+  })
+
+  it('unknown email gets the same generic error (no account enumeration)', async () => {
+    const result = await login(undefined, form({ email: `nobody-${stamp}@test.com`, password: PASSWORD }))
+    expect(result).toEqual({ error: 'Invalid email or password.' })
+  })
+
+  it('accounts pending approval cannot log in', async () => {
+    vi.mocked(createSession).mockClear()
+    const result = await login(undefined, form({ email: pendingEmail, password: PASSWORD }))
+    expect(result?.error).toMatch(/pending/i)
+    expect(createSession).not.toHaveBeenCalled()
   })
 })
 
 // ────────────────────────────────────────────────────────
-// TEST 2: Ticket Creation
+// TEST 2: Ticket Creation — the real createTicket action
 // ────────────────────────────────────────────────────────
 describe('Test 2: Ticket Creation', () => {
-  it('should create a ticket with correct defaults', async () => {
-    const lastTicket = await prisma.ticket.findFirst({
-      orderBy: { ticketNumber: 'desc' },
-      select: { ticketNumber: true },
-    })
-    const nextNumber = (lastTicket?.ticketNumber ?? 0) + 1
-    testTicketNumber = nextNumber
+  it('creates an OPEN ticket with the next number, an SLA deadline and an audit entry', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const before = await prisma.ticket.aggregate({ _max: { ticketNumber: true } })
 
-    const ticket = await prisma.ticket.create({
-      data: {
-        ticketNumber: nextNumber,
-        title: 'Test VPN connection issue',
-        description: 'Cannot connect to VPN from home, getting timeout errors.',
-        category: 'Network',
-        priority: 'HIGH',
-        status: 'OPEN',
-        createdById: employeeId,
-      },
-    })
-    testTicketId = ticket.id
+    await expect(
+      createTicket(
+        undefined,
+        form({
+          title: 'VPN keeps disconnecting',
+          description: 'Cannot stay connected to the VPN from home for more than a minute.',
+          category: 'Network',
+          priority: 'HIGH',
+        })
+      )
+    ).rejects.toThrow('NEXT_REDIRECT /tickets?created=true')
 
-    expect(ticket.id).toBeTruthy()
-    expect(ticket.ticketNumber).toBe(nextNumber)
-    expect(ticket.status).toBe('OPEN')
-    expect(ticket.priority).toBe('HIGH')
-    expect(ticket.createdById).toBe(employeeId)
-    expect(ticket.assignedToId).toBeNull()
-  })
-
-  it('should log ticket creation in history', async () => {
-    const history = await prisma.ticketHistory.create({
-      data: {
-        ticketId: testTicketId,
-        userId: employeeId,
-        action: `Ticket #${testTicketNumber} created`,
-      },
-    })
-    expect(history.action).toContain('created')
-    expect(history.ticketId).toBe(testTicketId)
-  })
-
-  it('should retrieve the created ticket with relations', async () => {
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: testTicketId },
-      include: { createdBy: { select: { name: true } } },
+    const ticket = await prisma.ticket.findFirst({
+      where: { createdById: employeeId, title: 'VPN keeps disconnecting' },
+      include: { ticketHistories: true },
     })
     expect(ticket).not.toBeNull()
-    expect(ticket?.createdBy.name).toBe('Test Employee')
-    expect(ticket?.category).toBe('Network')
+    expect(ticket!.status).toBe('OPEN')
+    expect(ticket!.priority).toBe('HIGH')
+    expect(ticket!.assignedToId).toBeNull()
+    expect(ticket!.ticketNumber).toBe((before._max.ticketNumber ?? 0) + 1)
+    expect(ticket!.slaDeadline!.getTime()).toBeGreaterThan(ticket!.createdAt.getTime())
+    expect(ticket!.ticketHistories.map((h) => h.action)).toContain(`Ticket #${ticket!.ticketNumber} created`)
+  })
+
+  it('rejects missing or too-short fields without creating a ticket', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const countBefore = await prisma.ticket.count({ where: { createdById: employeeId } })
+
+    const result = await createTicket(undefined, form({ title: 'VPN', description: 'broken', category: '' }))
+
+    expect(result?.fieldErrors?.title).toBeDefined()
+    expect(result?.fieldErrors?.description).toBeDefined()
+    expect(result?.fieldErrors?.category).toBeDefined()
+    expect(await prisma.ticket.count({ where: { createdById: employeeId } })).toBe(countBefore)
+  })
+
+  it('redirects signed-out users to the login page', async () => {
+    signedOut()
+    await expect(
+      createTicket(undefined, form({ title: 'Printer offline', description: 'The 2nd floor printer is offline.', category: 'Printer' }))
+    ).rejects.toThrow('NEXT_REDIRECT /login')
   })
 })
 
 // ────────────────────────────────────────────────────────
-// TEST 3: Role Authorization — block employee from IT actions
+// TEST 3: Role Authorization — real actions refuse the wrong role
 // ────────────────────────────────────────────────────────
 describe('Test 3: Role Authorization', () => {
-  it('EMPLOYEE role should not be IT_SUPPORT', async () => {
-    const emp = await prisma.user.findUnique({ where: { id: employeeId } })
-    expect(emp?.role).toBe('EMPLOYEE')
-    expect(emp?.role).not.toBe('IT_SUPPORT')
+  let ticketId: string
+
+  beforeAll(async () => {
+    ticketId = await createTestTicket(employeeId)
   })
 
-  it('IT_SUPPORT role should have elevated privileges', async () => {
-    const it = await prisma.user.findUnique({ where: { id: itSupportId } })
-    expect(it?.role).toBe('IT_SUPPORT')
+  it('EMPLOYEE cannot change ticket status', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const result = await updateTicketStatus(ticketId, 'ASSIGNED')
+    expect(result.error).toMatch(/Only IT Support/)
+    expect(await statusOf(ticketId)).toBe('OPEN')
   })
 
-  it('should simulate role check blocking employee from status update', () => {
-    const userRole: string = 'EMPLOYEE'
-    // Mirrors the server action check:
-    const canUpdateStatus = userRole === 'IT_SUPPORT'
-    expect(canUpdateStatus).toBe(false)
+  it('EMPLOYEE cannot assign or take over tickets', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    expect((await assignTicket(ticketId, itSupportId)).error).toMatch(/Unauthorized/)
+    expect((await takeOverTicket(ticketId)).error).toMatch(/Unauthorized/)
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
+    expect(ticket?.assignedToId).toBeNull()
   })
 
-  it('should allow IT_SUPPORT to update status', () => {
-    const userRole: string = 'IT_SUPPORT'
-    const canUpdateStatus = userRole === 'IT_SUPPORT'
-    expect(canUpdateStatus).toBe(true)
+  it('EMPLOYEE cannot promote themselves to ADMIN', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    await expect(updateUserRole(employeeId, 'ADMIN')).rejects.toThrow('NEXT_REDIRECT /tickets')
+    const user = await prisma.user.findUnique({ where: { id: employeeId } })
+    expect(user?.role).toBe('EMPLOYEE')
+  })
+
+  it('IT_SUPPORT cannot use admin-only actions', async () => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect((await reassignTicket(ticketId, itPeerId)).error).toMatch(/Only Admins/)
+    await expect(updateUserStatus(employeeId, 'SUSPENDED')).rejects.toThrow('NEXT_REDIRECT /tickets')
+    const user = await prisma.user.findUnique({ where: { id: employeeId } })
+    expect(user?.accountStatus).toBe('APPROVED')
+  })
+
+  it("IT_SUPPORT cannot change the status of another agent's ticket", async () => {
+    const peerTicketId = await createTestTicket(employeeId, { status: 'ASSIGNED', assignedToId: itPeerId })
+    signInAs(itSupportId, 'IT_SUPPORT')
+    const result = await updateTicketStatus(peerTicketId, 'IN_PROGRESS')
+    expect(result.error).toMatch(/Read Only/)
+    expect(await statusOf(peerTicketId)).toBe('ASSIGNED')
   })
 })
 
 // ────────────────────────────────────────────────────────
-// TEST 4: Ticket Status Lifecycle Validation
+// TEST 4: Status Lifecycle — the real updateTicketStatus state machine
 // ────────────────────────────────────────────────────────
 describe('Test 4: Status Lifecycle State Machine', () => {
-  it('should allow OPEN → ASSIGNED transition', () => {
-    expect(isValidTransition('OPEN', 'ASSIGNED')).toBe(true)
+  let ticketId: string
+
+  beforeAll(async () => {
+    ticketId = await createTestTicket(employeeId)
   })
 
-  it('should allow ASSIGNED → IN_PROGRESS transition', () => {
-    expect(isValidTransition('ASSIGNED', 'IN_PROGRESS')).toBe(true)
+  const moveTo = (status: 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED') => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    return updateTicketStatus(ticketId, status)
+  }
+
+  it.each(['IN_PROGRESS', 'RESOLVED', 'CLOSED'] as const)('rejects skipping from OPEN to %s', async (to) => {
+    expect((await moveTo(to)).error).toMatch(/Invalid status transition: OPEN/)
+    expect(await statusOf(ticketId)).toBe('OPEN')
   })
 
-  it('should allow IN_PROGRESS → RESOLVED transition', () => {
-    expect(isValidTransition('IN_PROGRESS', 'RESOLVED')).toBe(true)
+  it('OPEN → ASSIGNED claims the unassigned ticket for the agent', async () => {
+    expect(await moveTo('ASSIGNED')).toEqual({})
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
+    expect(ticket?.status).toBe('ASSIGNED')
+    expect(ticket?.assignedToId).toBe(itSupportId)
   })
 
-  it('should allow RESOLVED → CLOSED transition', () => {
-    expect(isValidTransition('RESOLVED', 'CLOSED')).toBe(true)
+  it('ASSIGNED → IN_PROGRESS → RESOLVED', async () => {
+    expect(await moveTo('IN_PROGRESS')).toEqual({})
+    expect(await moveTo('RESOLVED')).toEqual({})
+    expect(await statusOf(ticketId)).toBe('RESOLVED')
   })
 
-  it('should REJECT OPEN → IN_PROGRESS (skipping ASSIGNED)', () => {
-    expect(isValidTransition('OPEN', 'IN_PROGRESS')).toBe(false)
+  it('rejects going backwards from RESOLVED', async () => {
+    expect((await moveTo('OPEN')).error).toMatch(/Invalid status transition: RESOLVED/)
+    expect((await moveTo('IN_PROGRESS')).error).toMatch(/Invalid status transition: RESOLVED/)
+    expect(await statusOf(ticketId)).toBe('RESOLVED')
   })
 
-  it('should REJECT OPEN → RESOLVED (skipping steps)', () => {
-    expect(isValidTransition('OPEN', 'RESOLVED')).toBe(false)
-  })
-
-  it('should REJECT CLOSED → OPEN (backwards transition)', () => {
-    expect(isValidTransition('CLOSED', 'OPEN')).toBe(false)
-  })
-
-  it('should REJECT RESOLVED → OPEN (backwards transition)', () => {
-    expect(isValidTransition('RESOLVED', 'OPEN')).toBe(false)
-  })
-
-  it('should apply ASSIGNED status in database when IT_SUPPORT assigns ticket', async () => {
-    await prisma.ticket.update({
-      where: { id: testTicketId },
-      data: { assignedToId: itSupportId, status: 'ASSIGNED' },
-    })
-
-    const updated = await prisma.ticket.findUnique({ where: { id: testTicketId } })
-    expect(updated?.status).toBe('ASSIGNED')
-    expect(updated?.assignedToId).toBe(itSupportId)
-  })
-
-  it('should progress through full lifecycle: ASSIGNED → IN_PROGRESS → RESOLVED → CLOSED', async () => {
-    const transitions: Array<[string, string]> = [
-      ['ASSIGNED', 'IN_PROGRESS'],
-      ['IN_PROGRESS', 'RESOLVED'],
-      ['RESOLVED', 'CLOSED'],
-    ]
-
-    for (const [from, to] of transitions) {
-      expect(isValidTransition(from, to)).toBe(true)
-
-      await prisma.ticket.update({
-        where: { id: testTicketId },
-        data: { status: to },
-      })
-
-      const ticket = await prisma.ticket.findUnique({ where: { id: testTicketId } })
-      expect(ticket?.status).toBe(to)
+  it('RESOLVED → CLOSED, after which every transition is rejected', async () => {
+    expect(await moveTo('CLOSED')).toEqual({})
+    for (const to of ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED'] as const) {
+      expect((await moveTo(to)).error).toMatch(/terminal state/)
     }
+    expect(await statusOf(ticketId)).toBe('CLOSED')
+  })
+
+  it('records each successful transition in the audit trail, and nothing for rejected ones', async () => {
+    const history = await prisma.ticketHistory.findMany({ where: { ticketId }, select: { action: true, userId: true } })
+    expect(history.map((h) => h.action).sort()).toEqual(
+      [
+        'Ticket claimed and status changed from OPEN to ASSIGNED',
+        'Ticket status changed from ASSIGNED to IN_PROGRESS',
+        'Ticket status changed from IN_PROGRESS to RESOLVED',
+        'Ticket status changed from RESOLVED to CLOSED',
+      ].sort()
+    )
+    expect(history.every((h) => h.userId === itSupportId)).toBe(true)
   })
 })
 
 // ────────────────────────────────────────────────────────
-// TEST 5: Data Isolation — Employee cannot see other users' tickets
+// TEST 5: Data Isolation — real pages and actions
 // ────────────────────────────────────────────────────────
 describe('Test 5: Data Isolation', () => {
   let otherEmployeeId: string
   let otherTicketId: string
+  let ownTicketId: string
+
+  type ListProps = { tickets: { id: string; createdById: string }[] }
 
   beforeAll(async () => {
-    // Create a second employee
-    const other = await prisma.user.create({
-      data: {
-        name: 'Other Employee',
-        email: `other-employee-${Date.now()}@test.com`,
-        password: await bcrypt.hash('testpass123', 12),
-        role: 'EMPLOYEE',
-      },
+    otherEmployeeId = await createUser('Other Employee', `other-employee-${stamp}@test.com`, 'EMPLOYEE')
+    otherTicketId = await createTestTicket(otherEmployeeId)
+    ownTicketId = await createTestTicket(employeeId)
+    await prisma.comment.createMany({
+      data: [
+        { ticketId: ownTicketId, authorId: itSupportId, content: 'Public reply', isInternal: false },
+        { ticketId: ownTicketId, authorId: itSupportId, content: 'Internal note', isInternal: true },
+      ],
     })
-    otherEmployeeId = other.id
-
-    const lastTicket = await prisma.ticket.findFirst({
-      orderBy: { ticketNumber: 'desc' },
-      select: { ticketNumber: true },
-    })
-
-    // Create a ticket belonging to the other employee
-    const ticket = await prisma.ticket.create({
-      data: {
-        ticketNumber: (lastTicket?.ticketNumber ?? 0) + 1,
-        title: 'Other employee private ticket',
-        description: 'This is a private ticket for the other employee only.',
-        category: 'Software',
-        priority: 'LOW',
-        status: 'OPEN',
-        createdById: other.id,
-      },
-    })
-    otherTicketId = ticket.id
   })
 
-  afterAll(async () => {
-    await prisma.ticket.deleteMany({ where: { createdById: otherEmployeeId } })
-    await prisma.user.deleteMany({ where: { id: otherEmployeeId } })
+  it('ticket list page shows an EMPLOYEE only their own tickets', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const page = (await TicketsPage({ searchParams: Promise.resolve({}) })) as ReactElement<ListProps>
+    const ids = page.props.tickets.map((t) => t.id)
+    expect(ids).toContain(ownTicketId)
+    expect(ids).not.toContain(otherTicketId)
+    expect(page.props.tickets.every((t) => t.createdById === employeeId)).toBe(true)
   })
 
-  it('EMPLOYEE query should only return their own tickets', async () => {
-    // Simulate EMPLOYEE-scoped query (mirrors tickets page logic)
-    const myTickets = await prisma.ticket.findMany({
-      where: { createdById: employeeId },
-    })
-
-    const allIds = myTickets.map((t) => t.id)
-    expect(allIds).not.toContain(otherTicketId)
-  })
-
-  it('EMPLOYEE accessing another user ticket by ID should be blocked', async () => {
-    // Simulate detail page auth check
-    const ticket = await prisma.ticket.findUnique({ where: { id: otherTicketId } })
-    const requestingUserId = employeeId // This employee tries to access other's ticket
-    const hasAccess = ticket?.createdById === requestingUserId
-    expect(hasAccess).toBe(false) // Should be denied
-  })
-
-  it('IT_SUPPORT should see all tickets regardless of creator', async () => {
-    // IT_SUPPORT has no where-clause restriction
-    const allTickets = await prisma.ticket.findMany({
-      where: {}, // Empty — all tickets
-      select: { id: true, createdById: true },
-    })
-    const ids = allTickets.map((t) => t.id)
+  it('ticket list page shows IT_SUPPORT every ticket in the "all" queue', async () => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    const page = (await TicketsPage({ searchParams: Promise.resolve({ queue: 'all' }) })) as ReactElement<ListProps>
+    const ids = page.props.tickets.map((t) => t.id)
+    expect(ids).toContain(ownTicketId)
     expect(ids).toContain(otherTicketId)
-    expect(ids).toContain(testTicketId)
   })
 
-  it('EMPLOYEE should not be able to comment on another employee ticket', async () => {
-    // Simulate addComment ownership check
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: otherTicketId },
-      select: { createdById: true },
-    })
-    const requestingUserId = employeeId
-    const canComment = ticket?.createdById === requestingUserId
-    expect(canComment).toBe(false)
+  it("ticket detail page returns 404 for another employee's ticket", async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    await expect(TicketDetailPage({ params: Promise.resolve({ id: otherTicketId }) })).rejects.toThrow('NEXT_NOT_FOUND')
   })
 
   it('getTicketDetails returns null when an EMPLOYEE requests another user ticket', async () => {
@@ -360,16 +381,32 @@ describe('Test 5: Data Isolation', () => {
     expect(await getTicketDetails(otherTicketId)).toBeNull()
   })
 
-  it('getTicketDetails returns the ticket to its EMPLOYEE owner', async () => {
-    signInAs(otherEmployeeId, 'EMPLOYEE')
-    const ticket = await getTicketDetails(otherTicketId)
-    expect(ticket?.id).toBe(otherTicketId)
+  it('getTicketDetails returns the ticket to its EMPLOYEE owner without internal notes', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const ticket = await getTicketDetails(ownTicketId)
+    expect(ticket?.id).toBe(ownTicketId)
+    expect(ticket?.comments.map((c) => c.content)).toEqual(['Public reply'])
   })
 
-  it('getTicketDetails returns any ticket to IT_SUPPORT', async () => {
+  it('getTicketDetails returns any ticket, with internal notes, to IT_SUPPORT', async () => {
     signInAs(itSupportId, 'IT_SUPPORT')
-    const ticket = await getTicketDetails(otherTicketId)
-    expect(ticket?.id).toBe(otherTicketId)
+    expect((await getTicketDetails(otherTicketId))?.id).toBe(otherTicketId)
+    const own = await getTicketDetails(ownTicketId)
+    expect(own?.comments.map((c) => c.content).sort()).toEqual(['Internal note', 'Public reply'])
+  })
+
+  it("EMPLOYEE cannot comment on another employee's ticket", async () => {
+    signInAs(employeeId, 'EMPLOYEE', 'Test Employee')
+    const result = await addComment(otherTicketId, 'Let me in')
+    expect(result.error).toMatch(/Forbidden/)
+    expect(await prisma.comment.count({ where: { ticketId: otherTicketId } })).toBe(0)
+  })
+
+  it('EMPLOYEE comments are always public, even if they ask for an internal note', async () => {
+    signInAs(employeeId, 'EMPLOYEE', 'Test Employee')
+    expect(await addComment(ownTicketId, 'Still broken', true)).toEqual({})
+    const comment = await prisma.comment.findFirst({ where: { ticketId: ownTicketId, authorId: employeeId } })
+    expect(comment?.isInternal).toBe(false)
   })
 })
 
@@ -377,8 +414,6 @@ describe('Test 5: Data Isolation', () => {
 // TEST 6: API Authentication & Upload Safety
 // ────────────────────────────────────────────────────────
 describe('Test 6: API Authentication & Upload Safety', () => {
-  const signedOut = () => vi.mocked(getSession).mockResolvedValue(null)
-
   function uploadRequest(...files: File[]) {
     const formData = new FormData()
     files.forEach((f) => formData.append('files', f))

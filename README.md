@@ -50,7 +50,7 @@ This platform solves these challenges through:
 | **Styling & Design** | Tailwind CSS + CSS Design Tokens | Clean typography, dark/light adaptive surfaces, and zero-border minimalism |
 | **Motion & Charts** | Framer Motion & Recharts | Micro-animations, interactive layout transitions, and queue distribution graphs |
 | **Internationalization** | Custom Context Engine + Cookies | Instant zero-reload locale toggling, bidirectional layout (`rtl`/`ltr`) |
-| **Testing** | Vitest | 36 automated unit and integration tests covering security, state, and RBAC |
+| **Testing** | Vitest | 37 automated unit and integration tests covering security, state, and RBAC |
 
 ---
 
@@ -266,43 +266,46 @@ npm test
 npm run test:watch
 ```
 
-### Test Coverage Breakdown (36/36 Passing)
+### Test Coverage Breakdown (37/37 Passing)
+
+Every test calls the real server actions, pages and API routes against the database; only the Next.js request context (session cookie, `redirect`, `notFound`) and the Gemini client are stubbed.
 
 ```
-✓ tests/helpdesk.test.ts (36 tests)
-  ✓ Test 1: User Login (4 tests)
-    ✓ should find employee user by email
-    ✓ should validate correct password
-    ✓ should reject incorrect password
-    ✓ should return null for non-existent email
+✓ tests/helpdesk.test.ts (37 tests)
+  ✓ Test 1: User Login (5 tests)
+    ✓ valid credentials create a session for the user and redirect to their tickets
+    ✓ IT_SUPPORT is redirected to their assigned queue
+    ✓ wrong password is rejected without creating a session
+    ✓ unknown email gets the same generic error (no account enumeration)
+    ✓ accounts pending approval cannot log in
   ✓ Test 2: Ticket Creation (3 tests)
-    ✓ should create a ticket with correct defaults
-    ✓ should log ticket creation in history
-    ✓ should retrieve the created ticket with relations
-  ✓ Test 3: Role Authorization (4 tests)
-    ✓ EMPLOYEE role should not be IT_SUPPORT
-    ✓ IT_SUPPORT role should have elevated privileges
-    ✓ should simulate role check blocking employee from status update
-    ✓ should allow IT_SUPPORT to update status
-  ✓ Test 4: Status Lifecycle State Machine (10 tests)
-    ✓ should allow OPEN → ASSIGNED transition
-    ✓ should allow ASSIGNED → IN_PROGRESS transition
-    ✓ should allow IN_PROGRESS → RESOLVED transition
-    ✓ should allow RESOLVED → CLOSED transition
-    ✓ should REJECT OPEN → IN_PROGRESS (skipping ASSIGNED)
-    ✓ should REJECT OPEN → RESOLVED (skipping steps)
-    ✓ should REJECT CLOSED → OPEN (backwards transition)
-    ✓ should REJECT RESOLVED → OPEN (backwards transition)
-    ✓ should apply ASSIGNED status in database when IT_SUPPORT assigns ticket
-    ✓ should progress through full lifecycle: ASSIGNED → IN_PROGRESS → RESOLVED → CLOSED
-  ✓ Test 5: Data Isolation (7 tests)
-    ✓ EMPLOYEE query should only return their own tickets
-    ✓ EMPLOYEE accessing another user ticket by ID should be blocked
-    ✓ IT_SUPPORT should see all tickets regardless of creator
-    ✓ EMPLOYEE should not be able to comment on another employee ticket
+    ✓ creates an OPEN ticket with the next number, an SLA deadline and an audit entry
+    ✓ rejects missing or too-short fields without creating a ticket
+    ✓ redirects signed-out users to the login page
+  ✓ Test 3: Role Authorization (5 tests)
+    ✓ EMPLOYEE cannot change ticket status
+    ✓ EMPLOYEE cannot assign or take over tickets
+    ✓ EMPLOYEE cannot promote themselves to ADMIN
+    ✓ IT_SUPPORT cannot use admin-only actions
+    ✓ IT_SUPPORT cannot change the status of another agent's ticket
+  ✓ Test 4: Status Lifecycle State Machine (8 tests)
+    ✓ rejects skipping from OPEN to IN_PROGRESS
+    ✓ rejects skipping from OPEN to RESOLVED
+    ✓ rejects skipping from OPEN to CLOSED
+    ✓ OPEN → ASSIGNED claims the unassigned ticket for the agent
+    ✓ ASSIGNED → IN_PROGRESS → RESOLVED
+    ✓ rejects going backwards from RESOLVED
+    ✓ RESOLVED → CLOSED, after which every transition is rejected
+    ✓ records each successful transition in the audit trail, and nothing for rejected ones
+  ✓ Test 5: Data Isolation (8 tests)
+    ✓ ticket list page shows an EMPLOYEE only their own tickets
+    ✓ ticket list page shows IT_SUPPORT every ticket in the "all" queue
+    ✓ ticket detail page returns 404 for another employee's ticket
     ✓ getTicketDetails returns null when an EMPLOYEE requests another user ticket
-    ✓ getTicketDetails returns the ticket to its EMPLOYEE owner
-    ✓ getTicketDetails returns any ticket to IT_SUPPORT
+    ✓ getTicketDetails returns the ticket to its EMPLOYEE owner without internal notes
+    ✓ getTicketDetails returns any ticket, with internal notes, to IT_SUPPORT
+    ✓ EMPLOYEE cannot comment on another employee's ticket
+    ✓ EMPLOYEE comments are always public, even if they ask for an internal note
   ✓ Test 6: API Authentication & Upload Safety (8 tests)
     ✓ upload rejects unauthenticated requests
     ✓ upload rejects HTML and SVG files that browsers would execute
@@ -366,7 +369,7 @@ smart-helpdesk/
 ├── scripts/
 │   └── seed.js                # Cross-platform TypeScript transpiled seeder
 ├── tests/
-│   └── helpdesk.test.ts       # 36 Vitest integration & unit tests
+│   └── helpdesk.test.ts       # 37 Vitest integration & unit tests
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
@@ -379,7 +382,7 @@ smart-helpdesk/
 | Requirement | Implementation Verification | Status |
 |---|---|---|
 | **Role-Based Authentication** | JWT with `jose`, bcrypt hashing, dual role enforcement (`EMPLOYEE`, `IT_SUPPORT`, `ADMIN`) | ✅ Complete |
-| **Data Isolation** | Employees restricted to own tickets; IT/Admin view entire queue; verified via 7 automated tests | ✅ Complete |
+| **Data Isolation** | Employees restricted to own tickets; IT/Admin view entire queue; verified via 8 automated tests | ✅ Complete |
 | **Ticket Lifecycle Machine** | `OPEN → ASSIGNED → IN_PROGRESS → RESOLVED → CLOSED`; invalid/backward transitions rejected | ✅ Complete |
 | **Audit Logging** | Every status transition logged in `TicketHistory` with actor ID and timestamp | ✅ Complete |
 | **AI Copilot & Triage** | Google Gemini 2.0 Flash predicts category, priority, and self-help with explicit Accept/Dismiss UI | ✅ Complete |
@@ -387,7 +390,7 @@ smart-helpdesk/
 | **Bilingual Localization** | Native Arabic (RTL) & English (LTR) language support with persistent cookies/localStorage | ✅ Complete |
 | **Analytics Dashboard** | 6 live KPI cards, SLA countdown badges, and Recharts queue distribution visualization | ✅ Complete |
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
-| **Automated Testing** | 36 automated unit & integration tests passing with 100% success rate | ✅ Complete |
+| **Automated Testing** | 37 automated unit & integration tests passing with 100% success rate | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
 
 ---

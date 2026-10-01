@@ -50,7 +50,7 @@ This platform solves these challenges through:
 | **Styling & Design** | Tailwind CSS + CSS Design Tokens | Clean typography, dark/light adaptive surfaces, and zero-border minimalism |
 | **Motion & Charts** | Framer Motion & Recharts | Micro-animations, interactive layout transitions, and queue distribution graphs |
 | **Internationalization** | Custom Context Engine + Cookies | Instant zero-reload locale toggling, bidirectional layout (`rtl`/`ltr`) |
-| **Testing** | Vitest | 25 automated unit and integration tests covering security, state, and RBAC |
+| **Testing** | Vitest | 28 automated unit and integration tests covering security, state, and RBAC |
 
 ---
 
@@ -266,39 +266,43 @@ npm test
 npm run test:watch
 ```
 
-### Test Coverage Breakdown (25/25 Passing)
+### Test Coverage Breakdown (28/28 Passing)
 
 ```
-✓ tests/helpdesk.test.ts (25 tests) 1339ms
-  ✓ 1. User Login & Authentication (4 tests)
-    ✓ Valid credentials authenticate and return session token
-    ✓ Invalid password returns 401 unauthorized
-    ✓ Non-existent user returns 401 unauthorized
-    ✓ Session token correctly encodes role and user identity
-  ✓ 2. Ticket Creation & Validation (3 tests)
-    ✓ Employee can create ticket with title and description
-    ✓ Rejects ticket creation with missing required fields
-    ✓ Sets default status to OPEN and assigns unique ticketNumber
-  ✓ 3. Role-Based Access Control (4 tests)
-    ✓ Employee cannot access admin-only settings
-    ✓ Employee cannot assign tickets to agents
-    ✓ IT_SUPPORT can view queue and update ticket statuses
-    ✓ ADMIN has full governance access
-  ✓ 4. Status Lifecycle State Machine (9 tests)
-    ✓ Allows valid transition: OPEN -> ASSIGNED
-    ✓ Allows valid transition: ASSIGNED -> IN_PROGRESS
-    ✓ Allows valid transition: IN_PROGRESS -> RESOLVED
-    ✓ Allows valid transition: RESOLVED -> CLOSED
-    ✓ Rejects invalid skipped transition: OPEN -> RESOLVED
-    ✓ Rejects backward transition: RESOLVED -> OPEN
-    ✓ Rejects transition on CLOSED tickets
-    ✓ Prevents non-IT users from advancing status
-    ✓ Records every transition into TicketHistory audit trail
-  ✓ 5. Data Isolation & Multi-Tenancy (4 tests)
-    ✓ Employee only receives tickets where createdById matches
-    ✓ IT_SUPPORT receives all organizational tickets
-    ✓ Direct access to other user's ticket by ID is rejected for Employee
-    ✓ Comments from other tickets are strictly isolated
+✓ tests/helpdesk.test.ts (28 tests)
+  ✓ Test 1: User Login (4 tests)
+    ✓ should find employee user by email
+    ✓ should validate correct password
+    ✓ should reject incorrect password
+    ✓ should return null for non-existent email
+  ✓ Test 2: Ticket Creation (3 tests)
+    ✓ should create a ticket with correct defaults
+    ✓ should log ticket creation in history
+    ✓ should retrieve the created ticket with relations
+  ✓ Test 3: Role Authorization (4 tests)
+    ✓ EMPLOYEE role should not be IT_SUPPORT
+    ✓ IT_SUPPORT role should have elevated privileges
+    ✓ should simulate role check blocking employee from status update
+    ✓ should allow IT_SUPPORT to update status
+  ✓ Test 4: Status Lifecycle State Machine (10 tests)
+    ✓ should allow OPEN → ASSIGNED transition
+    ✓ should allow ASSIGNED → IN_PROGRESS transition
+    ✓ should allow IN_PROGRESS → RESOLVED transition
+    ✓ should allow RESOLVED → CLOSED transition
+    ✓ should REJECT OPEN → IN_PROGRESS (skipping ASSIGNED)
+    ✓ should REJECT OPEN → RESOLVED (skipping steps)
+    ✓ should REJECT CLOSED → OPEN (backwards transition)
+    ✓ should REJECT RESOLVED → OPEN (backwards transition)
+    ✓ should apply ASSIGNED status in database when IT_SUPPORT assigns ticket
+    ✓ should progress through full lifecycle: ASSIGNED → IN_PROGRESS → RESOLVED → CLOSED
+  ✓ Test 5: Data Isolation (7 tests)
+    ✓ EMPLOYEE query should only return their own tickets
+    ✓ EMPLOYEE accessing another user ticket by ID should be blocked
+    ✓ IT_SUPPORT should see all tickets regardless of creator
+    ✓ EMPLOYEE should not be able to comment on another employee ticket
+    ✓ getTicketDetails returns null when an EMPLOYEE requests another user ticket
+    ✓ getTicketDetails returns the ticket to its EMPLOYEE owner
+    ✓ getTicketDetails returns any ticket to IT_SUPPORT
 ```
 
 ## ⚠️ Known Limitations
@@ -353,7 +357,7 @@ smart-helpdesk/
 ├── scripts/
 │   └── seed.js                # Cross-platform TypeScript transpiled seeder
 ├── tests/
-│   └── helpdesk.test.ts       # 25 Vitest integration & unit tests
+│   └── helpdesk.test.ts       # 28 Vitest integration & unit tests
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
@@ -366,7 +370,7 @@ smart-helpdesk/
 | Requirement | Implementation Verification | Status |
 |---|---|---|
 | **Role-Based Authentication** | JWT with `jose`, bcrypt hashing, dual role enforcement (`EMPLOYEE`, `IT_SUPPORT`, `ADMIN`) | ✅ Complete |
-| **Data Isolation** | Employees restricted to own tickets; IT/Admin view entire queue; verified via 4 automated tests | ✅ Complete |
+| **Data Isolation** | Employees restricted to own tickets; IT/Admin view entire queue; verified via 7 automated tests | ✅ Complete |
 | **Ticket Lifecycle Machine** | `OPEN → ASSIGNED → IN_PROGRESS → RESOLVED → CLOSED`; invalid/backward transitions rejected | ✅ Complete |
 | **Audit Logging** | Every status transition logged in `TicketHistory` with actor ID and timestamp | ✅ Complete |
 | **AI Copilot & Triage** | Google Gemini 2.0 Flash predicts category, priority, and self-help with explicit Accept/Dismiss UI | ✅ Complete |
@@ -374,7 +378,7 @@ smart-helpdesk/
 | **Bilingual Localization** | Native Arabic (RTL) & English (LTR) language support with persistent cookies/localStorage | ✅ Complete |
 | **Analytics Dashboard** | 6 live KPI cards, SLA countdown badges, and Recharts queue distribution visualization | ✅ Complete |
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
-| **Automated Testing** | 25 automated unit & integration tests passing with 100% success rate | ✅ Complete |
+| **Automated Testing** | 28 automated unit & integration tests passing with 100% success rate | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
 
 ---

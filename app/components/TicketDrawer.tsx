@@ -82,6 +82,12 @@ export default function TicketDrawer({
     if (isOpen && ticketId) {
       setLoading(true)
       getTicketDetails(ticketId).then((data) => {
+        if (!data) {
+          toast.error(locale === 'ar' ? 'تعذر العثور على التذكرة أو ليس لديك صلاحية' : 'Ticket not found or unauthorized')
+          setLoading(false)
+          onClose()
+          return
+        }
         setTicket(data)
         setLoading(false)
       }).catch((err) => {

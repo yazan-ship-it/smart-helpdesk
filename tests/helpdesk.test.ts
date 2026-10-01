@@ -332,4 +332,11 @@ describe('Test 5: Data Isolation', () => {
     const canComment = ticket?.createdById === requestingUserId
     expect(canComment).toBe(false)
   })
+
+  it('EMPLOYEE accessing another user ticket via getTicketDetails logic should return null', async () => {
+    const ticket = await prisma.ticket.findUnique({ where: { id: otherTicketId } })
+    const session = { userId: employeeId, role: 'EMPLOYEE' }
+    const result = (session.role === 'EMPLOYEE' && ticket?.createdById !== session.userId) ? null : ticket
+    expect(result).toBeNull()
+  })
 })

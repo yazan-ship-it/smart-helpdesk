@@ -24,27 +24,19 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 const STORAGE_KEY = 'helpdesk-lang'
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('en')
-  const [mounted, setMounted] = useState(false)
-
-  // Initialize from localStorage or cookie
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY) as Locale | null
-      if (stored === 'en' || stored === 'ar') {
-        setLocaleState(stored)
-      } else {
-        // Check document lang or navigator language
-        const browserLang = navigator.language?.toLowerCase()
-        if (browserLang.startsWith('ar')) {
-          setLocaleState('ar')
-        }
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY) as Locale | null;
+        if (stored === 'en' || stored === 'ar') return stored;
+        const browserLang = navigator.language?.toLowerCase();
+        if (browserLang?.startsWith('ar')) return 'ar';
+      } catch {
+        // Fallback silently if localStorage is restricted
       }
-    } catch {
-      // Fallback silently if localStorage is restricted
     }
-    setMounted(true)
-  }, [])
+    return 'en';
+  });
 
   const dir: Direction = locale === 'ar' ? 'rtl' : 'ltr'
   const isRTL = dir === 'rtl'
@@ -87,14 +79,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // Translation lookup helper with dot-notation and parameter interpolation
   const t = useCallback(
     (path: string, paramsOrFallback?: Record<string, string | number> | string): string => {
-      let fallbackText = typeof paramsOrFallback === 'string' ? paramsOrFallback : undefined
+      const fallbackText = typeof paramsOrFallback === 'string' ? paramsOrFallback : undefined
       const params = typeof paramsOrFallback === 'object' ? paramsOrFallback : undefined
 
       const keys = path.split('.')
       
       // Helper to traverse object
-      const resolveKey = (dict: Record<string, any>): any => {
-        let current = dict
+      const resolveKey = (dict: unknown): unknown => {
+        let current: any = dict
         for (const k of keys) {
           if (current && typeof current === 'object' && k in current) {
             current = current[k]
@@ -114,14 +106,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         return fallbackText || path
       }
 
+      let text = result
       // Parameter replacement like {count} or {name}
       if (params) {
         Object.entries(params).forEach(([paramKey, val]) => {
-          result = result.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(val))
+          text = text.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(val))
         })
       }
 
-      return result
+      return text
     },
     [dictionary, locale]
   )

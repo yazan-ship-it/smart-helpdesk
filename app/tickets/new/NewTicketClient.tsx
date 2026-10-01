@@ -617,7 +617,7 @@ export default function NewTicketClient({ categories }: { categories: string[] }
  className={`border-1.5 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
  dragOver
  ? 'border-indigo-500 bg-indigo-500/10'
- : 'border-white/15 bg-background/40 hover:border-border hover:bg-background/60'
+ : 'border-border bg-background/40 hover:border-border hover:bg-background/60'
  }`}
  onDrop={handleDrop}
  onDragOver={(e) => {
@@ -974,7 +974,7 @@ export default function NewTicketClient({ categories }: { categories: string[] }
 
  {/* Empty / Initial State for Copilot (When no text or demo has been selected) */}
  {!activeTriage && (
- <div className="rounded-xl bg-background border border-white/5 p-4 text-center space-y-2.5 relative z-10">
+ <div className="rounded-xl bg-background border border-border p-4 text-center space-y-2.5 relative z-10">
  <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-600 dark:text-indigo-700 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-inner">
  <Bot className="w-4 h-4" />
  </div>
@@ -1004,7 +1004,7 @@ export default function NewTicketClient({ categories }: { categories: string[] }
  </div>
 
  <div className="grid grid-cols-2 gap-2 text-xs">
- <div className="p-2.5 rounded-xl bg-background border border-white/5 flex flex-col justify-between">
+ <div className="p-2.5 rounded-xl bg-background border border-border flex flex-col justify-between">
  <span className="text-[11px] text-muted-foreground block mb-1">
  Detected Category
  </span>
@@ -1013,7 +1013,7 @@ export default function NewTicketClient({ categories }: { categories: string[] }
  <span className="truncate">{activeTriage.category}</span>
  </span>
  </div>
- <div className="p-2.5 rounded-xl bg-background border border-white/5 flex flex-col justify-between">
+ <div className="p-2.5 rounded-xl bg-background border border-border flex flex-col justify-between">
  <span className="text-[11px] text-muted-foreground block mb-1">
  Suggested Priority
  </span>
@@ -1025,7 +1025,7 @@ export default function NewTicketClient({ categories }: { categories: string[] }
  </div>
 
  {activeTriage.reason && (
- <p className="text-[11px] text-muted-foreground leading-relaxed italic bg-background/40 p-2 rounded-lg border border-white/5">
+ <p className="text-[11px] text-muted-foreground leading-relaxed italic bg-background/40 p-2 rounded-lg border border-border">
  &quot;{activeTriage.reason}&quot;
  </p>
  )}
@@ -1050,7 +1050,7 @@ export default function NewTicketClient({ categories }: { categories: string[] }
 
  <ol className="space-y-2 text-xs text-foreground">
  {activeTriage.selfHelp.map((step, idx) => (
- <li key={idx} className="flex items-start gap-2.5 bg-card/50 p-2 rounded-lg border border-white/5">
+ <li key={idx} className="flex items-start gap-2.5 bg-card/50 p-2 rounded-lg border border-border">
  <span className="w-4 h-4 rounded bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 flex items-center justify-center font-mono text-[10px] shrink-0 font-bold mt-0.5">
  {idx + 1}
  </span>
@@ -1118,7 +1118,7 @@ export default function NewTicketClient({ categories }: { categories: string[] }
  )}
 
  {aiResult && aiDismissed && (
- <div className="rounded-xl p-3 text-center relative z-10 border border-white/5 bg-background/40">
+ <div className="rounded-xl p-3 text-center relative z-10 border border-border bg-background/40">
  <p className="text-[11px] text-muted-foreground">
  Dismissed.{' '}
  <button type="button" onClick={() => setAiDismissed(false)} className="text-indigo-700 dark:text-indigo-400 hover:text-indigo-800 dark:text-indigo-300 underline cursor-pointer">

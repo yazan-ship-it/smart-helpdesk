@@ -467,43 +467,44 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  iconColor="#f59e0b"
  valueColor="#f59e0b"
  />
- {/* Closed */}
- <StatCard
- label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'تذاكري المغلقة' : 'My Closed') : t('statuses.CLOSED')}
- value={stats.closed}
- icon={<CheckCircle2 className="w-4 h-4" />}
- iconBg="rgba(161,161,170,0.12)"
- iconColor="#a1a1aa"
- valueColor="#a1a1aa"
- />
  {/* In Progress */}
- <StatCard
- label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'قيد العمل' : 'My In Progress') : t('statuses.IN_PROGRESS')}
- value={stats.inProgress}
- icon={<Activity className="w-4 h-4" />}
- iconBg="rgba(59,130,246,0.12)"
- iconColor="#3b82f6"
- valueColor="#3b82f6"
- />
- {/* Resolved */}
- <StatCard
- label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'تم الحل' : 'My Resolved') : t('statuses.RESOLVED')}
- value={stats.resolved}
- icon={<CheckCircle2 className="w-4 h-4" />}
- iconBg="rgba(34,197,94,0.12)"
- iconColor="#22c55e"
- valueColor="#22c55e"
- />
- {/* Assigned */}
- <StatCard
- label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'المسندة' : 'My Assigned') : t('statuses.ASSIGNED')}
- value={stats.assigned}
- icon={<UserCheck className="w-4 h-4" />}
- iconBg="rgba(139,92,246,0.12)"
- iconColor="#8b5cf6"
- valueColor="#8b5cf6"
- />
- </div>
+				<StatCard
+					label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'قيد العمل' : 'My In Progress') : t('statuses.IN_PROGRESS')}
+					value={stats.inProgress}
+					icon={<Activity className="w-4 h-4" />}
+					iconBg="rgba(59,130,246,0.12)"
+					iconColor="#3b82f6"
+					valueColor="#3b82f6"
+				/>
+				{/* Resolved */}
+				<StatCard
+					label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'تم الحل' : 'My Resolved') : t('statuses.RESOLVED')}
+					value={stats.resolved}
+					icon={<CheckCircle2 className="w-4 h-4" />}
+					iconBg="rgba(34,197,94,0.12)"
+					iconColor="#22c55e"
+					valueColor="#22c55e"
+				/>
+				{/* Closed */}
+				<StatCard
+					label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'تذاكري المغلقة' : 'My Closed') : t('statuses.CLOSED')}
+					value={stats.closed}
+					icon={<CheckCircle2 className="w-4 h-4" />}
+					iconBg="rgba(161,161,170,0.12)"
+					iconColor="#a1a1aa"
+					valueColor="#a1a1aa"
+				/>
+				{/* Critical */}
+				<StatCard
+					label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'حرجة' : 'My Critical') : (locale === 'ar' ? 'حرجة' : 'Critical')}
+					value={stats.critical}
+					icon={<AlertTriangle className="w-4 h-4" />}
+					iconBg="rgba(239,68,68,0.12)"
+					iconColor="#ef4444"
+					valueColor="#ef4444"
+					pulse={stats.critical > 0}
+				/>
+			</div>
 
  {/* ─── 2. ANALYTICS CHART ─────────────────── */}
  {mounted && (

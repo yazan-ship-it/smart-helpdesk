@@ -452,6 +452,12 @@ export async function getTicketDetails(id: string) {
       }
     }
   })
+  if (!ticket) return null
+
+  if (session.role === 'EMPLOYEE' && ticket?.createdById !== session.userId) {
+    return null
+  }
+
   return ticket
 }
 

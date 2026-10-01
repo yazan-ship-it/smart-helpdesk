@@ -7,15 +7,16 @@ import { useTranslation } from '@/lib/i18n'
 
 export function SlaBadge({ deadline }: { deadline: string }) {
   const { locale } = useTranslation()
-  const [status, setStatus] = useState(() => getSlaStatus(new Date(deadline), new Date(), locale))
+  const [, setTick] = useState(0)
 
   useEffect(() => {
-    setStatus(getSlaStatus(new Date(deadline), new Date(), locale))
     const int = setInterval(() => {
-      setStatus(getSlaStatus(new Date(deadline), new Date(), locale))
+      setTick((t) => t + 1)
     }, 60000)
     return () => clearInterval(int)
-  }, [deadline, locale])
+  }, [])
+
+  const status = getSlaStatus(new Date(deadline), new Date(), locale)
 
   if (status.isBreached) {
     return (

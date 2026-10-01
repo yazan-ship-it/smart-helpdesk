@@ -3,9 +3,22 @@
  * Tests: login, ticket creation, role auth, status lifecycle, data isolation
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+
+// Server actions read the session from Next.js cookies; stub it so the real
+// actions can be called directly from tests.
+vi.mock('@/lib/session', () => ({ getSession: vi.fn() }))
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
+vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
+
+import { getSession, type Role, type SessionPayload } from '@/lib/session'
+import { getTicketDetails } from '@/app/actions/tickets'
+
+function signInAs(userId: string, role: Role) {
+  vi.mocked(getSession).mockResolvedValue({ userId, role } as SessionPayload)
+}
 
 const prisma = new PrismaClient()
 
@@ -333,10 +346,20 @@ describe('Test 5: Data Isolation', () => {
     expect(canComment).toBe(false)
   })
 
-  it('EMPLOYEE accessing another user ticket via getTicketDetails logic should return null', async () => {
-    const ticket = await prisma.ticket.findUnique({ where: { id: otherTicketId } })
-    const session = { userId: employeeId, role: 'EMPLOYEE' }
-    const result = (session.role === 'EMPLOYEE' && ticket?.createdById !== session.userId) ? null : ticket
-    expect(result).toBeNull()
+  it('getTicketDetails returns null when an EMPLOYEE requests another user ticket', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    expect(await getTicketDetails(otherTicketId)).toBeNull()
+  })
+
+  it('getTicketDetails returns the ticket to its EMPLOYEE owner', async () => {
+    signInAs(otherEmployeeId, 'EMPLOYEE')
+    const ticket = await getTicketDetails(otherTicketId)
+    expect(ticket?.id).toBe(otherTicketId)
+  })
+
+  it('getTicketDetails returns any ticket to IT_SUPPORT', async () => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    const ticket = await getTicketDetails(otherTicketId)
+    expect(ticket?.id).toBe(otherTicketId)
   })
 })

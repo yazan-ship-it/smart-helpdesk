@@ -50,7 +50,7 @@ This platform solves these challenges through:
 | **Styling & Design** | Tailwind CSS + CSS Design Tokens | Clean typography, dark/light adaptive surfaces, and zero-border minimalism |
 | **Motion & Charts** | Framer Motion & Recharts | Micro-animations, interactive layout transitions, and queue distribution graphs |
 | **Internationalization** | Custom Context Engine + Cookies | Instant zero-reload locale toggling, bidirectional layout (`rtl`/`ltr`) |
-| **Testing** | Vitest | 28 automated unit and integration tests covering security, state, and RBAC |
+| **Testing** | Vitest | 36 automated unit and integration tests covering security, state, and RBAC |
 
 ---
 
@@ -266,10 +266,10 @@ npm test
 npm run test:watch
 ```
 
-### Test Coverage Breakdown (28/28 Passing)
+### Test Coverage Breakdown (36/36 Passing)
 
 ```
-✓ tests/helpdesk.test.ts (28 tests)
+✓ tests/helpdesk.test.ts (36 tests)
   ✓ Test 1: User Login (4 tests)
     ✓ should find employee user by email
     ✓ should validate correct password
@@ -303,6 +303,15 @@ npm run test:watch
     ✓ getTicketDetails returns null when an EMPLOYEE requests another user ticket
     ✓ getTicketDetails returns the ticket to its EMPLOYEE owner
     ✓ getTicketDetails returns any ticket to IT_SUPPORT
+  ✓ Test 6: API Authentication & Upload Safety (8 tests)
+    ✓ upload rejects unauthenticated requests
+    ✓ upload rejects HTML and SVG files that browsers would execute
+    ✓ upload rejects files larger than 10 MB
+    ✓ upload rejects more than 5 files at once
+    ✓ upload stores an allowed file under a random name with the server-side type
+    ✓ AI triage route rejects unauthenticated requests without calling Gemini
+    ✓ AI translate route rejects unauthenticated requests without calling Gemini
+    ✓ translateAction rejects unauthenticated callers without calling Gemini
 ```
 
 ## ⚠️ Known Limitations
@@ -357,7 +366,7 @@ smart-helpdesk/
 ├── scripts/
 │   └── seed.js                # Cross-platform TypeScript transpiled seeder
 ├── tests/
-│   └── helpdesk.test.ts       # 28 Vitest integration & unit tests
+│   └── helpdesk.test.ts       # 36 Vitest integration & unit tests
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
@@ -378,7 +387,7 @@ smart-helpdesk/
 | **Bilingual Localization** | Native Arabic (RTL) & English (LTR) language support with persistent cookies/localStorage | ✅ Complete |
 | **Analytics Dashboard** | 6 live KPI cards, SLA countdown badges, and Recharts queue distribution visualization | ✅ Complete |
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
-| **Automated Testing** | 28 automated unit & integration tests passing with 100% success rate | ✅ Complete |
+| **Automated Testing** | 36 automated unit & integration tests passing with 100% success rate | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
 
 ---

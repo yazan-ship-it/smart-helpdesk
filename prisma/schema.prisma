@@ -1,0 +1,132 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Note: SQLite does not support native enums.
+// We use String fields and enforce enum values in application code (TypeScript).
+
+model User {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  password    String
+  /// Role: "EMPLOYEE" | "IT_SUPPORT" | "ADMIN"
+  role          String   @default("EMPLOYEE")
+  accountStatus String   @default("PENDING")
+  /// JSON array of skill categories, e.g. '["Hardware","Network"]'
+  skills      String   @default("[]")
+  /// Whether the IT agent is currently available for ticket assignment
+  isAvailable   Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  createdTickets  Ticket[]        @relation("CreatedBy")
+  assignedTickets Ticket[]        @relation("AssignedTo")
+  comments        Comment[]
+  ticketHistories TicketHistory[]
+}
+
+model Ticket {
+  id           String   @id @default(cuid())
+  ticketNumber Int      @unique
+  title        String
+  description  String
+  category     String
+  /// Priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  priority     String   @default("MEDIUM")
+  /// Status: "OPEN" | "ASSIGNED" | "IN_PROGRESS" | "RESOLVED" | "CLOSED"
+  status       String   @default("OPEN")
+  /// JSON array of attachment metadata: [{name, size, type, url}]
+  attachments  String   @default("[]")
+  slaDeadline  DateTime?
+  slaBreached  Boolean  @default(false)
+  csatRating   Int?
+  csatFeedback String?
+  resolvedAt   DateTime?
+  closedAt     DateTime?
+  assetId      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  createdById  String
+  createdBy    User   @relation("CreatedBy", fields: [createdById], references: [id])
+  assignedToId String?
+  assignedTo   User?  @relation("AssignedTo", fields: [assignedToId], references: [id])
+
+  comments        Comment[]
+  ticketHistories TicketHistory[]
+}
+
+model Comment {
+  id          String   @id @default(cuid())
+  content     String
+  /// JSON array of attachment metadata: [{name, size, type, url}]
+  attachments String   @default("[]")
+  isInternal  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+}
+
+model TicketHistory {
+  id             String   @id @default(cuid())
+  action         String
+  overrideReason String?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+}
+
+model AppSettings {
+  id                    String   @id @default("singleton")
+  appName               String   @default("Smart Helpdesk")
+  supportEmail          String   @default("support@company.com")
+  defaultPriority       String   @default("MEDIUM")
+  autoAssignmentEnabled Boolean  @default(true)
+  notifyNewUser         Boolean  @default(true)
+  notifyCriticalTicket  Boolean  @default(true)
+
+  // SLA & Hours
+  slaCriticalHours      Int      @default(4)
+  slaHighHours          Int      @default(24)
+  slaMediumHours        Int      @default(48)
+  slaLowHours           Int      @default(72)
+  businessHoursStart    String   @default("09:00")
+  businessHoursEnd      String   @default("17:00")
+  workDays              String   @default("[\"Sunday\",\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\"]")
+  pauseSlaOnWeekends    Boolean  @default(true)
+
+  // AI & Automation
+  enableAiTriage        Boolean  @default(true)
+  aiConfidenceThreshold Int      @default(70)
+  fallbackHeuristicsEnabled Boolean @default(true)
+
+  // Registration & Security
+  autoApproveDomain     String   @default("@company.com")
+  maintenanceMode       Boolean  @default(false)
+
+  // Dynamic Data
+  categoriesList        String   @default("[\"Hardware\",\"Software\",\"Network\",\"Email & Communication\",\"Access & Permissions\",\"Printer\",\"Security\",\"Other\"]")
+  cannedResponses       String   @default("[{\"id\":\"1\",\"title\":\"Password Reset\",\"content\":\"Your password has been reset. Temporary credentials dispatched.\"},{\"id\":\"2\",\"title\":\"Request Asset Tag\",\"content\":\"Please provide your computer Asset Tag barcode number.\"}]")
+
+  updatedAt             DateTime @updatedAt
+}

@@ -149,6 +149,7 @@ export const en = {
   },
   // Tickets Specific
   tickets: {
+    createNew: 'New Ticket',
     searchTickets: 'Search tickets...',
     searchPlaceholder: 'Search by title, ticket ID, requester…',
     filters: 'Filters',

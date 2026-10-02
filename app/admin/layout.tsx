@@ -97,7 +97,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         {/* Footer: user dropdown */}
         <div className="p-3 border-t border-[var(--border)]">
-          <UserDropdown user={{ name: session.name, role: getRoleLabel(session.role, locale) }} placement="top" />
+          <UserDropdown user={{ name: session.name, role: session.role }} placement="top" />
         </div>
       </aside>
 

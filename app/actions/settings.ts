@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/db'
 import { getSession } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
+import { getAppSettings, parseCategories } from '@/lib/settings'
+import { sanitizeSkills } from '@/lib/skills'
 
 export async function updateSettings(data: {
   appName: string
@@ -105,9 +107,13 @@ export async function updateAgentSkills(userId: string, skills: string[]) {
     throw new Error('Unauthorized')
   }
 
+  const agent = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  if (agent?.role !== 'IT_SUPPORT') return { success: false }
+
+  const categories = parseCategories((await getAppSettings())?.categoriesList)
   await prisma.user.update({
     where: { id: userId },
-    data: { skills: JSON.stringify(skills) }
+    data: { skills: JSON.stringify(sanitizeSkills(skills, categories)) },
   })
 
   revalidatePath('/admin/settings')

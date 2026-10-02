@@ -49,7 +49,7 @@ async function main() {
       password: itSupportPassword,
       role: 'IT_SUPPORT',
       accountStatus: 'APPROVED',
-      skills: JSON.stringify(['Network', 'Email', 'Access Issue', 'Email & Communication', 'Access & Permissions', 'Printer']),
+      skills: JSON.stringify(['Network', 'Email & Communication', 'Access & Permissions', 'Printer']),
       isAvailable: true,
     },
   })

@@ -151,6 +151,7 @@ export const ar: TranslationDictionary = {
   },
   // Tickets Specific
   tickets: {
+    createNew: 'تذكرة جديدة',
     searchTickets: 'البحث في التذاكر...',
     searchPlaceholder: 'البحث بالعنوان، رقم التذكرة، مقدم الطلب...',
     filters: 'الفلاتر',

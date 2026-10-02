@@ -6,6 +6,7 @@ import { updateSettings, updateAgentSkills } from '@/app/actions/settings'
 import { Loader2, Save, Layout, Clock, FolderGit2, Sparkles, MessageSquare, Plus, Trash2, X, UserCog } from 'lucide-react'
 import type { AppSettings } from '@prisma/client'
 import { useTranslation, getPriorityLabel } from '@/lib/i18n'
+import { parseSkills } from '@/lib/skills'
 
 type Agent = {
   id: string
@@ -57,7 +58,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
   const [localAgents, setLocalAgents] = useState(
     agents.map(a => ({
       ...a,
-      parsedSkills: a.skills ? JSON.parse(a.skills) as string[] : []
+      parsedSkills: parseSkills(a.skills)
     }))
   )
 
@@ -208,7 +209,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
         // Save agent skills
         for (const agent of localAgents) {
           const originalAgent = agents.find(a => a.id === agent.id)
-          const originalSkills = originalAgent?.skills ? JSON.parse(originalAgent.skills) : []
+          const originalSkills = parseSkills(originalAgent?.skills)
           // Only update if changed
           if (JSON.stringify(originalSkills) !== JSON.stringify(agent.parsedSkills)) {
             await updateAgentSkills(agent.id, agent.parsedSkills)

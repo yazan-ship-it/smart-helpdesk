@@ -5,10 +5,11 @@ import bcrypt from 'bcryptjs'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
 import { requireAdmin } from '@/app/actions/auth'
+import { getAppSettings, parseCategories } from '@/lib/settings'
+import { sanitizeSkills } from '@/lib/skills'
 
 export type AccountStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED'
 
-const VALID_SKILLS = ['Hardware', 'Software', 'Network', 'Email', 'Access Issue', 'Printer', 'Security', 'Other']
 
 // ─── Update User Account Status (Approve / Reject / Suspend) ────────────────────────────
 export async function updateUserStatus(
@@ -57,27 +58,6 @@ export async function bulkUpdateUserStatus(
   return {}
 }
 
-// ─── Update IT Support Agent Skills ───────────────────────────────────────────
-export async function updateUserSkills(
-  userId: string,
-  skills: string[],
-): Promise<{ error?: string }> {
-  await requireAdmin()
-
-  const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) return { error: 'User not found.' }
-
-  const sanitised = skills.filter((s) => VALID_SKILLS.includes(s))
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { skills: JSON.stringify(sanitised) },
-  })
-
-  revalidatePath('/admin/users')
-  return {}
-}
-
 // ─── Update User Role (and skills) ───────────────────────────────────────────
 export async function updateUserRole(
   userId: string,
@@ -96,7 +76,7 @@ export async function updateUserRole(
   const dataToUpdate = {
     role,
     // Clear skills if not IT Support
-    skills: role === 'IT_SUPPORT' ? JSON.stringify(skills.filter((s) => VALID_SKILLS.includes(s))) : '[]',
+    skills: role === 'IT_SUPPORT' ? JSON.stringify(sanitizeSkills(skills, parseCategories((await getAppSettings())?.categoriesList))) : '[]',
   }
 
   await prisma.user.update({

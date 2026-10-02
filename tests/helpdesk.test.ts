@@ -69,6 +69,7 @@ const pendingEmail = `test-pending-${stamp}@test.com`
 let employeeId: string
 let itSupportId: string
 let itPeerId: string
+let adminId: string
 const testUserIds: string[] = []
 
 function signInAs(userId: string, role: Role, name = 'Test User') {
@@ -118,6 +119,7 @@ beforeAll(async () => {
   employeeId = await createUser('Test Employee', employeeEmail, 'EMPLOYEE')
   itSupportId = await createUser('Test IT Support', itSupportEmail, 'IT_SUPPORT')
   itPeerId = await createUser('Test IT Peer', `test-it-peer-${stamp}@test.com`, 'IT_SUPPORT')
+  adminId = await createUser('Test Admin', `test-admin-${stamp}@test.com`, 'ADMIN')
   await createUser('Test Pending', pendingEmail, 'EMPLOYEE', 'PENDING')
 })
 
@@ -246,6 +248,27 @@ describe('Test 2: Ticket Creation', () => {
     }
   })
 
+  it('auto-assignment understands agents saved with the old skill names', async () => {
+    const setting = await prisma.appSettings.findUnique({ where: { id: 'singleton' }, select: { autoAssignmentEnabled: true } })
+    // Make the test agent the only available Email specialist, using the legacy "Email" name
+    const others = await prisma.user.findMany({ where: { role: 'IT_SUPPORT', isAvailable: true, id: { not: itSupportId } }, select: { id: true } })
+    await prisma.user.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { isAvailable: false } })
+    await prisma.user.update({ where: { id: itSupportId }, data: { skills: JSON.stringify(['Email']), isAvailable: true } })
+    try {
+      await prisma.appSettings.update({ where: { id: 'singleton' }, data: { autoAssignmentEnabled: true } })
+      signInAs(employeeId, 'EMPLOYEE')
+      await expect(
+        createTicket(undefined, form({ title: 'Outlook will not send', description: 'Emails stay in the outbox.', category: 'Email & Communication' }))
+      ).rejects.toThrow('NEXT_REDIRECT')
+      const ticket = await prisma.ticket.findFirst({ where: { createdById: employeeId, title: 'Outlook will not send' } })
+      expect(ticket?.assignedToId).toBe(itSupportId)
+    } finally {
+      await prisma.user.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { isAvailable: true } })
+      await prisma.user.update({ where: { id: itSupportId }, data: { skills: '[]' } })
+      if (setting) await prisma.appSettings.update({ where: { id: 'singleton' }, data: setting })
+    }
+  })
+
   it('redirects signed-out users to the login page', async () => {
     signedOut()
     await expect(
@@ -292,6 +315,14 @@ describe('Test 3: Role Authorization', () => {
     await expect(updateUserStatus(employeeId, 'SUSPENDED')).rejects.toThrow('NEXT_REDIRECT /tickets')
     const user = await prisma.user.findUnique({ where: { id: employeeId } })
     expect(user?.accountStatus).toBe('APPROVED')
+  })
+
+  it('admins can only give agents skills that are real categories', async () => {
+    signInAs(adminId, 'ADMIN')
+    expect(await updateUserRole(itPeerId, 'IT_SUPPORT', ['Email', 'Hacking', 'Printer'])).toEqual({})
+    const peer = await prisma.user.findUnique({ where: { id: itPeerId } })
+    expect(JSON.parse(peer!.skills)).toEqual(['Email & Communication', 'Printer'])
+    await prisma.user.update({ where: { id: itPeerId }, data: { skills: '[]' } })
   })
 
   it("IT_SUPPORT cannot change the status of another agent's ticket", async () => {

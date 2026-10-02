@@ -26,7 +26,8 @@ import {
 } from 'lucide-react'
 import { updateUserStatus, updateUserRole, bulkUpdateUserStatus, inviteUser } from '@/app/actions/admin'
 import { useIsClient } from '@/lib/useIsClient'
-import { useTranslation } from '@/lib/i18n'
+import { useTranslation, getCategoryLabel } from '@/lib/i18n'
+import { parseSkills } from '@/lib/skills'
 import { getRoleLabel } from '@/lib/roles'
 import type { Role } from '@/lib/session'
 import { formatRelativeTime } from '@/lib/utils'
@@ -51,15 +52,11 @@ type UserRow = {
 type Props = {
   users: UserRow[]
   counts: { total: number; pending: number; approved: number; rejected: number; suspended: number; invited: number }
+  /** Ticket categories; agent skills are chosen from these */
+  categories: string[]
 }
-
-const ALL_SKILLS = ['Hardware', 'Software', 'Network', 'Email', 'Access Issue', 'Printer', 'Security', 'Other']
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function parseSkills(raw: string): string[] {
-  try { return JSON.parse(raw || '[]') } catch { return [] }
-}
-
 function StatusBadge({ status }: { status: string }) {
   const { locale } = useTranslation()
   const map: Record<string, string> = {
@@ -166,7 +163,7 @@ function InviteUserModal({ onClose }: { onClose: () => void }) {
 }
 
 // ── Edit User Modal ───────────────────────────────────────────────────────────
-function EditUserModal({ user, onClose }: { user: UserRow; onClose: () => void }) {
+function EditUserModal({ user, categories, onClose }: { user: UserRow; categories: string[]; onClose: () => void }) {
   const { locale } = useTranslation()
   const router = useRouter()
   const [role, setRole] = useState(user.role as Role)
@@ -211,10 +208,10 @@ function EditUserModal({ user, onClose }: { user: UserRow; onClose: () => void }
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-2">{locale === 'ar' ? 'المهارات المعينة' : 'Assigned Skills'}</label>
               <div className="grid grid-cols-2 gap-2">
-                {ALL_SKILLS.map(skill => (
+                {categories.map(skill => (
                   <label key={skill} className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={skills.includes(skill)} onChange={() => toggleSkill(skill)} className="rounded border-border text-indigo-600 focus:ring-indigo-500" />
-                    {skill}
+                    {getCategoryLabel(skill, locale)}
                   </label>
                 ))}
               </div>
@@ -238,7 +235,7 @@ function EditUserModal({ user, onClose }: { user: UserRow; onClose: () => void }
 }
 
 // ── User Row ─────────────────────────────────────────────────────────────────
-function UserTableRow({ user, selected, onToggle }: { user: UserRow, selected: boolean, onToggle: () => void }) {
+function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow; categories: string[]; selected: boolean; onToggle: () => void }) {
   const { locale } = useTranslation()
   const router = useRouter()
   const [isPendingStatus, startStatusTransition] = useTransition()
@@ -304,7 +301,7 @@ function UserTableRow({ user, selected, onToggle }: { user: UserRow, selected: b
             {skills.length > 0 ? (
               skills.slice(0, 2).map((s) => (
                 <span key={s} className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-medium">
-                  {s}
+                  {getCategoryLabel(s, locale)}
                 </span>
               ))
             ) : <span className="text-[10px] text-muted-foreground">None</span>}
@@ -360,13 +357,13 @@ function UserTableRow({ user, selected, onToggle }: { user: UserRow, selected: b
           </button>
         </div>
       </td>
-      {showEdit && <EditUserModal user={user} onClose={() => setShowEdit(false)} />}
+      {showEdit && <EditUserModal user={user} categories={categories} onClose={() => setShowEdit(false)} />}
     </motion.tr>
   )
 }
 
 // ── Main Client Component ─────────────────────────────────────────────────────
-export default function AdminUsersClient({ users, counts }: Props) {
+export default function AdminUsersClient({ users, counts, categories }: Props) {
   const router = useRouter()
   const { locale } = useTranslation()
   const [search, setSearch] = useState('')
@@ -542,6 +539,7 @@ export default function AdminUsersClient({ users, counts }: Props) {
                   <UserTableRow 
                     key={user.id} 
                     user={user} 
+                    categories={categories}
                     selected={selectedIds.has(user.id)}
                     onToggle={() => toggleRow(user.id)}
                   />

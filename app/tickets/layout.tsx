@@ -6,7 +6,6 @@ import { prisma } from '@/lib/db'
 import UserDropdown from '@/app/components/UserDropdown'
 import AvailabilityToggle from '@/app/components/AvailabilityToggle'
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'
-import { getRoleLabel } from '@/lib/roles'
 
 export default async function TicketsLayout({
   children,
@@ -89,7 +88,7 @@ export default async function TicketsLayout({
             </Link>
 
             <ThemeSwitcher />
-            <UserDropdown user={{ name: session?.name || 'User', role: session?.role ? getRoleLabel(session.role, locale) : (locale === 'ar' ? 'مستخدم' : 'User') }} />
+            <UserDropdown user={{ name: session?.name || 'User', role: session?.role ?? '' }} />
           </div>
         </header>
 
@@ -237,7 +236,7 @@ export default async function TicketsLayout({
           {session?.role === 'IT_SUPPORT' && (
             <AvailabilityToggle initialAvailability={agentAvailability} />
           )}
-          <UserDropdown user={{ name: session?.name || 'User', role: session?.role ? getRoleLabel(session.role) : 'User' }} placement="top" />
+          <UserDropdown user={{ name: session?.name || 'User', role: session?.role ?? '' }} placement="top" />
         </div>
       </aside>
 

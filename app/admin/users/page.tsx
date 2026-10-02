@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { getAppSettings, parseCategories } from '@/lib/settings'
 import AdminUsersClient from './AdminUsersClient'
 
 export const metadata = { title: 'User Management | Admin' }
@@ -43,6 +44,7 @@ export default async function AdminUsersPage() {
         stats: u._count,
       }))}
       counts={counts}
+      categories={parseCategories((await getAppSettings())?.categoriesList)}
     />
   )
 }

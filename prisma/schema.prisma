@@ -36,6 +36,7 @@ model User {
   assignedTickets Ticket[]        @relation("AssignedTo")
   comments        Comment[]
   ticketHistories TicketHistory[]
+  attachments     Attachment[]
 }
 
 model Ticket {
@@ -48,8 +49,6 @@ model Ticket {
   priority     String   @default("MEDIUM")
   /// Status: "OPEN" | "ASSIGNED" | "IN_PROGRESS" | "RESOLVED" | "CLOSED"
   status       String   @default("OPEN")
-  /// JSON array of attachment metadata: [{name, size, type, url}]
-  attachments  String   @default("[]")
   slaDeadline  DateTime?
   slaBreached  Boolean  @default(false)
   csatRating   Int?
@@ -68,13 +67,34 @@ model Ticket {
 
   comments        Comment[]
   ticketHistories TicketHistory[]
+  attachments     Attachment[]
+}
+
+/// A file uploaded with a ticket. The bytes are in private storage (lib/storage.ts)
+/// and only served through /api/files/[id].
+model Attachment {
+  id         String   @id @default(cuid())
+  /// Key of the file in storage: a random UUID plus the allowed extension
+  storageKey String   @unique
+  name       String
+  size       Int
+  /// Derived from the extension on the server, never taken from the browser
+  type       String
+  createdAt  DateTime @default(now())
+
+  uploadedById String
+  uploadedBy   User    @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  /// Null between the upload and the creation of the ticket it was uploaded for
+  ticketId     String?
+  ticket       Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([uploadedById, ticketId])
 }
 
 model Comment {
   id          String   @id @default(cuid())
   content     String
-  /// JSON array of attachment metadata: [{name, size, type, url}]
-  attachments String   @default("[]")
   isInternal  Boolean  @default(false)
   createdAt   DateTime @default(now())
 

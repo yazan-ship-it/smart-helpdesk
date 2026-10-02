@@ -51,3 +51,5 @@ prisma/dev.db
 !.env.example
 # User-uploaded attachments
 public/uploads/
+# Local attachment storage (lib/storage.ts)
+.data/

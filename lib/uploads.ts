@@ -1,11 +1,16 @@
 /** Upload rules shared by the upload API and the forms that use it. */
 
+/** Attachments per ticket */
 export const MAX_FILES = 5
-export const MAX_FILE_SIZE_MB = 10
+/**
+ * Per file. Vercel functions accept request bodies up to 4.5 MB, so the form
+ * uploads one file per request and each file must stay under that.
+ */
+export const MAX_FILE_SIZE_MB = 4
 export const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 
-// Files are served straight from /public, where the extension decides the
-// Content-Type. Only allow types that browsers will not execute (no .html, .svg, .js ...).
+// The stored type (and so the Content-Type the file is served with) comes from
+// the extension. Only allow types that browsers will not execute (no .html, .svg, .js ...).
 export const ALLOWED_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -28,34 +33,11 @@ export function fileExtension(name: string): string {
   return dot === -1 ? '' : name.slice(dot).toLowerCase()
 }
 
-export type Attachment = { name: string; size: number; type: string; url: string }
+/** What the pages and the upload API send to the browser about a file */
+export type AttachmentInfo = { id: string; name: string; size: number; type: string; url: string }
 
-/** Where the upload API stores files: a random UUID plus an allowed extension */
-const UPLOAD_URL = /^\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.[a-z]+)$/
+export const attachmentUrl = (id: string) => `/api/files/${id}`
 
-/**
- * Attachment metadata comes back from the browser, so check that it only
- * points at files the upload API created. Returns null if anything is off.
- */
-export function parseAttachments(json: string | null | undefined): Attachment[] | null {
-  let list: unknown
-  try {
-    list = JSON.parse(json || '[]')
-  } catch {
-    return null
-  }
-  if (!Array.isArray(list) || list.length > MAX_FILES) return null
-
-  const result: Attachment[] = []
-  for (const item of list) {
-    if (typeof item !== 'object' || item === null) return null
-    const { name, size, url } = item as Record<string, unknown>
-    const match = typeof url === 'string' ? url.match(UPLOAD_URL) : null
-    if (!match || !ALLOWED_TYPES[match[1]]) return null
-    if (typeof name !== 'string' || !name.trim() || name.length > 255) return null
-    if (typeof size !== 'number' || !Number.isFinite(size) || size < 0 || size > MAX_FILE_SIZE) return null
-    // The type is derived from the stored file's extension, not taken from the client
-    result.push({ name: name.trim(), size, type: ALLOWED_TYPES[match[1]], url: match[0] })
-  }
-  return result
+export function toAttachmentInfo(a: { id: string; name: string; size: number; type: string }): AttachmentInfo {
+  return { id: a.id, name: a.name, size: a.size, type: a.type, url: attachmentUrl(a.id) }
 }

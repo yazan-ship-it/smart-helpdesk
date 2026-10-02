@@ -44,7 +44,8 @@ vi.mock('@/app/tickets/TicketListClient', () => ({ default: () => null }))
 vi.mock('@/app/tickets/[id]/TicketDetailClient', () => ({ default: () => null }))
 vi.mock('@/app/admin/users/AdminUsersClient', () => ({ default: () => null }))
 
-import { unlink } from 'fs/promises'
+import { rm } from 'fs/promises'
+import os from 'os'
 import path from 'path'
 import type { ReactElement } from 'react'
 import { NextRequest } from 'next/server'
@@ -77,10 +78,14 @@ import TicketDetailPage from '@/app/tickets/[id]/page'
 import AdminTicketsPage from '@/app/admin/tickets/page'
 import AdminUsersPage from '@/app/admin/users/page'
 import { POST as uploadPOST } from '@/app/api/upload/route'
+import { GET as fileGET } from '@/app/api/files/[id]/route'
 import { POST as triagePOST } from '@/app/api/ai/triage/route'
 import { POST as summarizePOST } from '@/app/api/ai/summarize/[id]/route'
 
 const prisma = new PrismaClient()
+const storageDir = path.join(os.tmpdir(), `helpdesk-test-uploads-${process.pid}`)
+process.env.STORAGE_DIR = storageDir
+delete process.env.BLOB_READ_WRITE_TOKEN
 
 // ─── Test Data ────────────────────────────────────────
 const PASSWORD = 'testpass123'
@@ -134,6 +139,19 @@ async function statusOf(ticketId: string) {
   return (await prisma.ticket.findUnique({ where: { id: ticketId } }))?.status
 }
 
+function uploadRequest(...files: File[]) {
+  const formData = new FormData()
+  files.forEach((f) => formData.append('files', f))
+  return new NextRequest('http://localhost/api/upload', { method: 'POST', body: formData })
+}
+
+/** Uploads a small PNG as the signed-in user and returns its attachment id */
+async function uploadPng(name = 'shot.png') {
+  const res = await uploadPOST(uploadRequest(new File(['png-bytes'], name, { type: 'image/png' })))
+  expect(res.status).toBe(200)
+  return (await res.json()).attachments[0].id as string
+}
+
 function form(fields: Record<string, string>) {
   const fd = new FormData()
   for (const [k, v] of Object.entries(fields)) fd.set(k, v)
@@ -157,6 +175,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await clearTestRateLimits()
+  await rm(storageDir, { recursive: true, force: true })
   // Tickets cascade to their comments and history
   await prisma.ticket.deleteMany({ where: { createdById: { in: testUserIds } } })
   await prisma.ticketHistory.deleteMany({ where: { userId: { in: testUserIds } } })
@@ -531,12 +550,6 @@ describe('Test 5: Data Isolation', () => {
 // TEST 6: API Authentication & Upload Safety
 // ────────────────────────────────────────────────────────
 describe('Test 6: API Authentication & Upload Safety', () => {
-  function uploadRequest(...files: File[]) {
-    const formData = new FormData()
-    files.forEach((f) => formData.append('files', f))
-    return new NextRequest('http://localhost/api/upload', { method: 'POST', body: formData })
-  }
-
   function jsonRequest(url: string, body: unknown) {
     return new NextRequest(url, {
       method: 'POST',
@@ -559,9 +572,9 @@ describe('Test 6: API Authentication & Upload Safety', () => {
     }
   })
 
-  it('upload rejects files larger than 10 MB', async () => {
+  it('upload rejects files larger than 4 MB (the hosting limit per request)', async () => {
     signInAs(employeeId, 'EMPLOYEE')
-    const big = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'big.pdf', { type: 'application/pdf' })
+    const big = new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'big.pdf', { type: 'application/pdf' })
     const res = await uploadPOST(uploadRequest(big))
     expect(res.status).toBe(413)
   })
@@ -573,16 +586,18 @@ describe('Test 6: API Authentication & Upload Safety', () => {
     expect(res.status).toBe(400)
   })
 
-  it('upload stores an allowed file under a random name with the server-side type', async () => {
+  it('upload stores an allowed file privately, under a random name, with the server-side type', async () => {
     signInAs(employeeId, 'EMPLOYEE')
     const res = await uploadPOST(uploadRequest(new File(['png-bytes'], 'Screen Shot.PNG', { type: 'text/html' })))
     expect(res.status).toBe(200)
     const { attachments } = await res.json()
     expect(attachments).toHaveLength(1)
-    expect(attachments[0].name).toBe('Screen Shot.PNG')
-    expect(attachments[0].type).toBe('image/png') // not the client-claimed text/html
-    expect(attachments[0].url).toMatch(/^\/uploads\/[0-9a-f-]{36}\.png$/)
-    await unlink(path.join(process.cwd(), 'public', attachments[0].url))
+    expect(attachments[0]).toMatchObject({ name: 'Screen Shot.PNG', type: 'image/png' }) // not the client-claimed text/html
+    expect(attachments[0].url).toBe(`/api/files/${attachments[0].id}`)
+
+    const row = await prisma.attachment.findUniqueOrThrow({ where: { id: attachments[0].id } })
+    expect(row).toMatchObject({ uploadedById: employeeId, ticketId: null })
+    expect(row.storageKey).toMatch(/^[0-9a-f-]{36}\.png$/)
   })
 
   it('AI triage route rejects unauthenticated requests without calling Gemini', async () => {
@@ -1082,28 +1097,55 @@ describe('Test 13: Server-side Validation', () => {
     expect(await created('Validation ticket')).toBeNull()
   })
 
-  it.each([
-    ['a link to another site', [{ name: 'a.html', size: 1, type: 'text/html', url: 'https://evil.test/a.html' }]],
-    ['a path outside the uploads folder', [{ name: 'env', size: 1, type: 'text/plain', url: '/uploads/../../.env' }]],
-    ['a file type that is not allowed', [{ name: 'a.svg', size: 1, type: 'image/png', url: '/uploads/123e4567-e89b-12d3-a456-426614174000.svg' }]],
-    ['more than 5 files', Array(6).fill({ name: 'a.png', size: 1, type: 'image/png', url: '/uploads/123e4567-e89b-12d3-a456-426614174000.png' })],
-    ['something that is not a list', 'not json'],
-  ])('rejects attachments with %s', async (_label, attachments) => {
+  it('a ticket can only use the requester\'s own uploads that are not attached elsewhere', async () => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    const someoneElses = await uploadPng()
     signInAs(employeeId, 'EMPLOYEE')
-    const json = typeof attachments === 'string' ? attachments : JSON.stringify(attachments)
-    expect(await createTicket(undefined, ticketForm({ attachmentsJson: json }))).toEqual({ error: 'invalid_attachments' })
+    const mine = await uploadPng()
+    const attach = (ids: unknown) => createTicket(undefined, ticketForm({ attachmentIds: typeof ids === 'string' ? ids : JSON.stringify(ids) }))
+
+    for (const ids of [[someoneElses], ['no-such-upload'], [mine, mine], Array(6).fill(mine), 'not json', [42]]) {
+      expect(await attach(ids), JSON.stringify(ids)).toEqual({ error: 'invalid_attachments' })
+    }
+    expect(await created('Validation ticket')).toBeNull()
+
+    await expect(createTicket(undefined, ticketForm({ title: 'With attachment', attachmentIds: JSON.stringify([mine]) }))).rejects.toThrow('NEXT_REDIRECT')
+    const ticket = await created('With attachment')
+    expect((await prisma.attachment.findUniqueOrThrow({ where: { id: mine } })).ticketId).toBe(ticket!.id)
+    // Already used: can't be attached to a second ticket
+    expect(await attach([mine])).toEqual({ error: 'invalid_attachments' })
   })
 
-  it('stores uploaded attachments with the type taken from the file, not the browser', async () => {
+  it('attachments are only served to people who may see the ticket', async () => {
+    const fetchFile = async (id: string) => fileGET(new NextRequest(`http://localhost/api/files/${id}`), { params: Promise.resolve({ id }) })
     signInAs(employeeId, 'EMPLOYEE')
-    const url = '/uploads/123e4567-e89b-12d3-a456-426614174000.png'
-    await expect(
-      createTicket(undefined, ticketForm({ title: 'With attachment', attachmentsJson: JSON.stringify([{ name: 'shot.png', size: 10, type: 'text/html', url }]) }))
-    ).rejects.toThrow('NEXT_REDIRECT')
-    expect(JSON.parse((await created('With attachment'))!.attachments)).toEqual([{ name: 'shot.png', size: 10, type: 'image/png', url }])
+    const id = await uploadPng('proof.png')
+
+    // Before the ticket exists only the uploader can see it
+    expect((await fetchFile(id)).status).toBe(200)
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect((await fetchFile(id)).status).toBe(404)
+
+    signInAs(employeeId, 'EMPLOYEE')
+    await expect(createTicket(undefined, ticketForm({ title: 'Private file', attachmentIds: JSON.stringify([id]) }))).rejects.toThrow('NEXT_REDIRECT')
+
+    signInAs(itSupportId, 'IT_SUPPORT')
+    const res = await fetchFile(id)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('png-bytes')
+    expect(res.headers.get('content-type')).toBe('image/png')
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(res.headers.get('content-security-policy')).toMatch(/^sandbox/)
+    expect(res.headers.get('cache-control')).toMatch(/^private/)
+
+    const otherEmployee = await createUser('Other Employee', `test-other-employee-${stamp}@test.com`, 'EMPLOYEE')
+    signInAs(otherEmployee, 'EMPLOYEE')
+    expect((await fetchFile(id)).status).toBe(404)
+    signedOut()
+    expect((await fetchFile(id)).status).toBe(401)
   })
 
-  it('tickets created at the same moment still get different numbers', async () => {
+    it('tickets created at the same moment still get different numbers', async () => {
     signInAs(employeeId, 'EMPLOYEE')
     const results = await Promise.allSettled(
       Array.from({ length: 6 }, (_, i) => createTicket(undefined, ticketForm({ title: `Concurrent ticket ${i}` }))),

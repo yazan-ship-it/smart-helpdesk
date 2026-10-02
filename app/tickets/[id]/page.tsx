@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
+import { toAttachmentInfo } from '@/lib/uploads'
 import { parseCannedResponses } from '@/lib/settings'
 import TicketDetailClient, { type TicketDetailData } from './TicketDetailClient'
 import type { Metadata } from 'next'
@@ -36,6 +37,7 @@ export default async function TicketDetailPage({
  include: { user: { select: { name: true } } },
  orderBy: { createdAt: 'asc' },
  },
+ attachments: { select: { id: true, name: true, size: true, type: true }, orderBy: { createdAt: 'asc' } },
  },
  })
 
@@ -65,7 +67,7 @@ export default async function TicketDetailPage({
  category: ticket.category,
  priority: ticket.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
  status: ticket.status as 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED',
- attachments: ticket.attachments,
+ attachments: ticket.attachments.map(toAttachmentInfo),
  slaDeadline: ticket.slaDeadline?.toISOString() || null,
  slaBreached: ticket.slaBreached,
  csatRating: ticket.csatRating,

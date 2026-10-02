@@ -10,7 +10,7 @@ import { calculateBusinessHoursDeadline, statusChangeFields } from '@/lib/sla'
 import { historyData } from '@/lib/history'
 import { PRIORITIES, type Priority } from '@/lib/ai/triage'
 import { parseCategories } from '@/lib/settings'
-import { parseAttachments } from '@/lib/uploads'
+import { MAX_FILES } from '@/lib/uploads'
 import { fail, type ActionResult, type ErrorCode } from '@/lib/errors'
 import { COMMENT_MAX, CSAT_FEEDBACK_MAX, DESCRIPTION_MAX, DESCRIPTION_MIN, TITLE_MAX, TITLE_MIN } from '@/lib/ticket-rules'
 
@@ -47,6 +47,20 @@ async function findAssignee(userId: string) {
   })
 }
 
+class InvalidAttachmentsError extends Error {}
+
+/** A JSON list of distinct ids, at most MAX_FILES; null if malformed */
+function parseIdList(value: FormDataEntryValue | null): string[] | null {
+  if (value === null || value === '') return []
+  try {
+    const ids: unknown = JSON.parse(String(value))
+    if (!Array.isArray(ids) || ids.length > MAX_FILES || !ids.every((id) => typeof id === 'string' && id.length <= 64)) return null
+    return new Set(ids).size === ids.length ? (ids as string[]) : null
+  } catch {
+    return null
+  }
+}
+
 function isRetryableWriteConflict(err: unknown) {
   return err instanceof Prisma.PrismaClientKnownRequestError && (err.code === 'P2002' || err.code === 'P2034')
 }
@@ -72,8 +86,9 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
   const priority = (formData.get('priority') as Priority | null) ?? 'MEDIUM'
   if (!PRIORITIES.includes(priority)) return { error: 'invalid_priority' }
 
-  const attachments = parseAttachments(formData.get('attachmentsJson') as string | null)
-  if (!attachments) return { error: 'invalid_attachments' }
+  // Ids of files this user uploaded for this ticket (POST /api/upload)
+  const attachmentIds = parseIdList(formData.get('attachmentIds'))
+  if (!attachmentIds) return { error: 'invalid_attachments' }
 
   // Skill-based auto-dispatch is an admin policy (Settings → auto-assignment), not the requester's choice
   let dispatch: DispatchResult = { assigned: false, assignedToId: null, status: 'OPEN' }
@@ -123,11 +138,19 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
             priority,
             status: dispatch.status,
             assignedToId: dispatch.assigned ? dispatch.agentId : null,
-            attachments: JSON.stringify(attachments),
             slaDeadline,
             createdById: session.userId,
           },
         })
+
+        // Only the requester's own uploads that don't belong to a ticket yet
+        if (attachmentIds.length > 0) {
+          const { count } = await tx.attachment.updateMany({
+            where: { id: { in: attachmentIds }, uploadedById: session.userId, ticketId: null },
+            data: { ticketId: ticket.id },
+          })
+          if (count !== attachmentIds.length) throw new InvalidAttachmentsError()
+        }
 
         await tx.ticketHistory.create({
           data: { ticketId: ticket.id, userId: session.userId, ...historyData({ type: 'created', number: ticketNumber }, session.name) },
@@ -147,6 +170,7 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
       })
       break
     } catch (err) {
+      if (err instanceof InvalidAttachmentsError) return { error: 'invalid_attachments' }
       if (attempt < 5 && isRetryableWriteConflict(err)) continue
       throw err
     }

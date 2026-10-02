@@ -22,9 +22,9 @@ import { createTicket, type TicketState } from '@/app/actions/tickets'
 import { useTranslation, getCategoryLabel, getPriorityLabel } from '@/lib/i18n'
 import { PRIORITIES, type Priority, type TriageSuggestion } from '@/lib/ai/triage'
 import { DESCRIPTION_MAX, TITLE_MAX } from '@/lib/ticket-rules'
-import { ACCEPT_ATTRIBUTE, ALLOWED_TYPES, MAX_FILES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB, fileExtension } from '@/lib/uploads'
+import { ACCEPT_ATTRIBUTE, ALLOWED_TYPES, MAX_FILES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB, fileExtension, type AttachmentInfo } from '@/lib/uploads'
 
-type Attachment = { name: string; size: number; type: string; url: string; preview?: string }
+type Attachment = AttachmentInfo & { preview?: string }
 
 type Props = {
   categories: string[]
@@ -127,19 +127,19 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
     }
 
     setUploading(true)
-    const formData = new FormData()
-    files.forEach((f) => formData.append('files', f))
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ? t(`errors.${data.error}`, data.params) : t('newTicket.uploadFailed'))
+      // One file per request: hosting platforms limit the size of a request body
+      for (const file of files) {
+        const formData = new FormData()
+        formData.append('files', file)
+        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ? t(`errors.${data.error}`, data.params) : t('newTicket.uploadFailed'))
 
-      const uploaded = await Promise.all(
-        (data.attachments as Attachment[]).map(async (att, i) =>
-          att.type.startsWith('image/') ? { ...att, preview: await readAsDataUrl(files[i]) } : att
-        )
-      )
-      setAttachments((prev) => [...prev, ...uploaded])
+        const [uploaded] = data.attachments as AttachmentInfo[]
+        const preview = uploaded.type.startsWith('image/') ? await readAsDataUrl(file) : undefined
+        setAttachments((prev) => [...prev, { ...uploaded, preview }])
+      }
       toast.success(t('newTicket.filesAttached', { count: files.length }))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('newTicket.uploadFailed'))
@@ -192,10 +192,7 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
               action={(formData) => {
                 formData.set('category', category)
                 formData.set('priority', priority)
-                formData.set(
-                  'attachmentsJson',
-                  JSON.stringify(attachments.map(({ name, size, type, url }) => ({ name, size, type, url })))
-                )
+                formData.set('attachmentIds', JSON.stringify(attachments.map((a) => a.id)))
                 return action(formData)
               }}
               className="rounded-2xl bg-card border border-border p-6 sm:p-7 shadow-sm space-y-6"

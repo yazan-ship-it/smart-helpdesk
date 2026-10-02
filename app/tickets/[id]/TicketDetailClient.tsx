@@ -27,6 +27,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { updateTicketStatus, assignTicket, reassignTicket, addComment, takeOverTicket, confirmTicketResolution, reopenTicket, submitCsatRating } from '@/app/actions/tickets'
+import type { AttachmentInfo } from '@/lib/uploads'
 import { formatRelativeTime, formatTicketNumber } from '@/lib/utils'
 import { SlaBadge } from '@/components/SlaBadge'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
@@ -55,7 +56,7 @@ export type Attachment = {
  category: string
  priority: Priority
  status: Status
- attachments: string
+ attachments: AttachmentInfo[]
  slaDeadline: string | null
  slaBreached: boolean | null
  csatRating: number | null
@@ -192,13 +193,7 @@ export default function TicketDetailClient({
   }
 
 
- // Parse attachments
- let attachmentsList: Attachment[] = []
- try {
- attachmentsList = JSON.parse(ticket.attachments || '[]')
- } catch {
- attachmentsList = []
- }
+ const attachmentsList = ticket.attachments
 
  // Handle comment submit
  const handleCommentSubmit = (e: React.FormEvent) => {

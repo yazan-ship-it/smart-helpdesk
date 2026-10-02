@@ -21,7 +21,7 @@ export default async function AdminTicketsPage(props: { searchParams: Promise<{ 
     include: {
       createdBy: { select: { name: true } },
       assignedTo: { select: { name: true } },
-      _count: { select: { comments: true } },
+      _count: { select: { comments: true, attachments: true } },
     },
     orderBy: { createdAt: 'desc' },
   })

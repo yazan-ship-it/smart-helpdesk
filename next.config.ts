@@ -2,8 +2,6 @@ import type { NextConfig } from "next";
 
 /** Sent with every response */
 const securityHeaders = [
-  // Nobody may put the app in a frame (clickjacking); no plugins; no <base> tricks
-  { key: "Content-Security-Policy", value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -19,10 +17,12 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       {
-        // User-uploaded attachments: stop browsers from sniffing a file into a type
-        // other than its (allowlisted) extension, e.g. treating a .txt as HTML
-        source: "/uploads/:path*",
-        headers: [{ key: "X-Content-Type-Options", value: "nosniff" }],
+        // Nobody may put the app in a frame (clickjacking); no plugins; no <base> tricks.
+        // Not for attachments: app/api/files/[id] sends a stricter sandbox policy, which this would replace.
+        source: "/:path((?!api/files/).*)",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" },
+        ],
       },
     ];
   },

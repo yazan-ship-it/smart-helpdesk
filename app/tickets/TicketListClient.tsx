@@ -59,8 +59,7 @@ export type TicketData = {
  createdBy: { name: string }
  assignedToId: string | null
  assignedTo: { name: string } | null
- _count: { comments: number }
- attachments: string
+ _count: { comments: number; attachments: number }
  slaDeadline?: string
 }
 
@@ -885,9 +884,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  >
  <AnimatePresence mode="popLayout">
  {filtered.map((ticket) => {
- const attachmentCount = (() => {
- try { return JSON.parse(ticket.attachments || '[]').length } catch { return 0 }
- })()
+ const attachmentCount = ticket._count.attachments
  const isHighOrCritical = ticket.priority === 'CRITICAL' || ticket.priority === 'HIGH'
 
  return (

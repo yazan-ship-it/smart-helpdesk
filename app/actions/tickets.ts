@@ -64,11 +64,9 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
   })
   const nextNumber = (lastTicket?.ticketNumber ?? 0) + 1
 
-  const autoAssign = formData.get('autoAssign') === 'true'
-
-  // 🚀 Skill-Based Auto-Dispatch Matrix
+  // Skill-based auto-dispatch is an admin policy (Settings → auto-assignment), not the requester's choice
   let dispatch: DispatchResult = { assigned: false, assignedToId: null, status: 'OPEN' }
-  if (autoAssign) {
+  if (settings?.autoAssignmentEnabled ?? true) {
     dispatch = await resolveAutoAssignment(category)
   }
 

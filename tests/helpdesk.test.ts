@@ -220,6 +220,32 @@ describe('Test 2: Ticket Creation', () => {
     expect(await prisma.ticket.count({ where: { createdById: employeeId } })).toBe(countBefore)
   })
 
+  it('auto-assigns to a matching agent only when the admin setting is on', async () => {
+    const setting = await prisma.appSettings.findUnique({ where: { id: 'singleton' }, select: { autoAssignmentEnabled: true } })
+    await prisma.user.update({ where: { id: itSupportId }, data: { skills: JSON.stringify(['Security']), isAvailable: true } })
+    const submit = (title: string) =>
+      expect(
+        createTicket(undefined, form({ title, description: 'Suspicious login alert on my account.', category: 'Security' }))
+      ).rejects.toThrow('NEXT_REDIRECT')
+
+    try {
+      signInAs(employeeId, 'EMPLOYEE')
+      await prisma.appSettings.update({ where: { id: 'singleton' }, data: { autoAssignmentEnabled: false } })
+      await submit('Auto-assign off ticket')
+      const off = await prisma.ticket.findFirst({ where: { createdById: employeeId, title: 'Auto-assign off ticket' } })
+      expect(off).toMatchObject({ status: 'OPEN', assignedToId: null })
+
+      await prisma.appSettings.update({ where: { id: 'singleton' }, data: { autoAssignmentEnabled: true } })
+      await submit('Auto-assign on ticket')
+      const on = await prisma.ticket.findFirst({ where: { createdById: employeeId, title: 'Auto-assign on ticket' } })
+      expect(on?.status).toBe('ASSIGNED')
+      expect(on?.assignedToId).not.toBeNull()
+    } finally {
+      if (setting) await prisma.appSettings.update({ where: { id: 'singleton' }, data: setting })
+      await prisma.user.update({ where: { id: itSupportId }, data: { skills: '[]' } })
+    }
+  })
+
   it('redirects signed-out users to the login page', async () => {
     signedOut()
     await expect(

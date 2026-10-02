@@ -1,7 +1,7 @@
 # Smart IT Helpdesk 🚀
 ### Enterprise IT Service Management & AI-Powered Triage Platform
 
-An enterprise-grade IT Support Ticket Management System built with **Next.js 16 (App Router)**, **TypeScript**, **Prisma ORM + SQLite**, **Tailwind CSS**, and **Google Gemini 2.0 Flash AI** for autonomous triage, automated diagnostics, and on-demand cross-language translation.
+An enterprise-grade IT Support Ticket Management System built with **Next.js 16 (App Router)**, **TypeScript**, **Prisma ORM + SQLite**, **Tailwind CSS**, and **Google Gemini** (`gemini-2.5-flash` by default) for ticket triage suggestions, ticket summaries for IT staff, and on-demand translation.
 
 ---
 
@@ -14,7 +14,7 @@ An enterprise-grade IT Support Ticket Management System built with **Next.js 16 
 - [Core Capabilities](#-core-capabilities)
   - [Role-Based Access Control (RBAC)](#1-role-based-access-control-rbac)
   - [Deterministic Ticket State Machine](#2-deterministic-ticket-state-machine)
-  - [Google Gemini 2.0 Flash AI Integration](#3-google-gemini-20-flash-ai-integration)
+  - [Google Gemini AI Integration](#3-google-gemini-ai-integration)
   - [Bilingual Localization & RTL/LTR Engine](#4-bilingual-localization--rtlltr-engine)
   - [Agent Operational Workflows & Drawers](#5-agent-operational-workflows--drawers)
   - [Multi-Theme & Modern Aesthetic System](#6-multi-theme--modern-aesthetic-system)
@@ -31,7 +31,7 @@ An enterprise-grade IT Support Ticket Management System built with **Next.js 16 
 Smart IT Helpdesk bridges the gap between end-user frustration and IT service resolution. Traditional ticketing systems suffer from vague problem descriptions, misrouted tickets, and manual triage delays. 
 
 This platform solves these challenges through:
-1. **Intelligent Self-Help & Triage:** Powered by Google Gemini 2.0 Flash, issues are analyzed at creation to offer employees instant self-help solutions while proposing accurate categories and priority levels.
+1. **AI-Assisted Triage & Self-Help:** Google Gemini suggests a category, a priority and a few safe self-help steps while the employee writes the ticket. The employee decides whether to use the suggestion.
 2. **Deterministic Lifecycle Enforcement:** Tickets adhere strictly to a verified one-way state transition machine (`OPEN` → `ASSIGNED` → `IN_PROGRESS` → `RESOLVED` → `CLOSED`) with immutable historical audit logs.
 3. **Bilingual Enterprise Usability:** Complete native Arabic (RTL) and English (LTR) localization coupled with on-demand Zendesk/Jira-style AI translation for global IT operations.
 4. **Agent Productivity Suite:** Fast sliding drawer interfaces, skill-based automated dispatch, SLA breach indicators, and rich visual KPI analytics.
@@ -46,11 +46,11 @@ This platform solves these challenges through:
 | **Language** | TypeScript 5 | Strict typing throughout models, APIs, and UI components |
 | **Database & ORM** | Prisma ORM + SQLite (`dev.db`) | Zero-config, ACID-compliant local database with relational schema |
 | **Authentication** | `jose` (JWT) + `bcryptjs` | Stateless encrypted HTTP-only session cookies with 12-round salt hashing |
-| **AI Engine** | Google Gemini 2.0 Flash (`@google/genai`) | Low-latency structured JSON generation, diagnostics, and translation |
+| **AI Engine** | Google Gemini via `@google/genai` (`gemini-2.5-flash`, falls back to `gemini-2.5-flash-lite`) | Schema-validated JSON output for triage and summaries; translation |
 | **Styling & Design** | Tailwind CSS + CSS Design Tokens | Clean typography, dark/light adaptive surfaces, and zero-border minimalism |
 | **Motion & Charts** | Framer Motion & Recharts | Micro-animations, interactive layout transitions, and queue distribution graphs |
 | **Internationalization** | Custom Context Engine + Cookies | Instant zero-reload locale toggling, bidirectional layout (`rtl`/`ltr`) |
-| **Testing** | Vitest | 37 automated unit and integration tests covering security, state, and RBAC |
+| **Testing** | Vitest | 105 unit and integration tests that call the real actions, pages and API routes |
 
 ---
 
@@ -115,7 +115,9 @@ erDiagram
 
     TicketHistory {
         String id PK "cuid()"
-        String action "Status Transition / Event Description"
+        String action "English sentence (logs, legacy rows)"
+        String event "Event type, e.g. status_changed"
+        String meta "JSON event data, e.g. from/to"
         String overrideReason "Justification for Emergency Overrides"
         String ticketId FK "Ticket.id"
         String userId FK "User.id"
@@ -169,24 +171,19 @@ Tickets advance strictly through a verified linear progression:
 
 $$\mathbf{OPEN} \longrightarrow \mathbf{ASSIGNED} \longrightarrow \mathbf{IN\_PROGRESS} \longrightarrow \mathbf{RESOLVED} \longrightarrow \mathbf{CLOSED}$$
 
-- **Forward-Only Guard:** Backward transitions (e.g., `RESOLVED` → `OPEN`) and skipped states (e.g., `OPEN` → `RESOLVED`) are rejected with explicit server errors.
-- **Immutable Audit History:** Every state change, assignment alteration, and override is recorded in `TicketHistory` with the actor's ID and timestamp.
+- **Forward-Only Guard:** IT staff cannot move a ticket backwards (e.g., `RESOLVED` → `OPEN`) or skip states (e.g., `OPEN` → `RESOLVED`); the server rejects it.
+- **Requester Reopen:** The one deliberate exception: the employee who opened a ticket can reopen it after it is resolved or closed, with a written reason. The ticket goes back to `IN_PROGRESS` (or `OPEN` if unassigned) and the reopen is logged.
+- **SLA Tracking:** Each ticket gets a resolution deadline in business hours (per priority, from Settings). Resolution and close times are recorded, and a ticket resolved after its deadline is flagged as an SLA breach.
+- **Audit History:** Every state change, assignment and comment is recorded in `TicketHistory` as a typed event (`lib/history.ts`) with the actor and time, so the timeline is shown in the viewer's language.
 - **CSAT Feedback Loop:** When an employee closes a resolved ticket, an interactive 5-star Customer Satisfaction (CSAT) rating and feedback form is triggered.
 - **Confetti Celebration:** Resolving a ticket triggers an interactive visual celebration via `canvas-confetti`.
 
-### 3. Google Gemini 2.0 Flash AI Integration
-- **Autonomous Triage (`/tickets/new`):**
-  - Synthesizes incident title and narrative in real time.
-  - Predicts category and priority with high precision.
-  - Generates 2–3 immediately actionable self-help troubleshooting steps for the user.
-  - **Human-in-the-Loop Transparency:** AI recommendations appear in a dedicated preview panel where the employee explicitly clicks **[✓ Accept AI Suggestion]** or **[Dismiss]**.
-- **Agent Diagnostic Advisor (`/tickets/[id]`):**
-  - Generates executive summaries of complex comment threads.
-  - Formulates technical root-cause hypotheses and provides 1-click **"+ Copy to reply draft"** technical guidance.
-- **Zendesk/Jira-Style On-Demand Translation:**
-  - Embedded **`[ ✨ ترجمة بواسطة الذكاء الاصطناعي ]`** button on tickets and comment timelines.
-  - Enables IT agents and employees to view instant translations in their preferred language underneath the text without modifying the original database record.
-  - Built-in heuristic fallbacks ensure zero disruption even during API quota exhaustion.
+### 3. Google Gemini AI Integration
+- **Triage suggestions (`/tickets/new`):** Gemini returns a category (one of the admin's categories), a priority and 2–3 self-help steps, in the user's language. The answer is constrained by a JSON schema and validated on the server. The employee clicks **Use this suggestion** or **Dismiss**; nothing is applied automatically.
+- **Ticket summaries for IT staff (`/tickets/[id]`):** On request, Gemini summarises the description and the whole discussion and proposes a next step, which can be inserted into the reply.
+- **On-demand translation:** Tickets and comments can be translated into the viewer's language without changing the original text.
+- **Honest fallbacks:** If Gemini is rate-limited or overloaded, the request is retried on a second model with its own quota. If AI is still unavailable, triage falls back to keyword rules that are clearly labelled as such (this can be turned off in Settings). Translation and summaries show an error instead of inventing text.
+- **Safety:** Ticket text is passed to the model as data, with an instruction to ignore instructions inside it, and the server only accepts valid categories and priorities.
 
 ### 4. Bilingual Localization & RTL/LTR Engine
 - **True Bilingual Architecture:** Complete, professional Arabic (`ar`) and English (`en`) dictionary translation without path alterations (`/ar/tickets` vs `/en/tickets`).
@@ -196,7 +193,8 @@ $$\mathbf{OPEN} \longrightarrow \mathbf{ASSIGNED} \longrightarrow \mathbf{IN\_PR
 ### 5. Agent Operational Workflows & Drawers
 - **Slide-Over Ticket Drawer (`TicketDrawer.tsx`):** Allows IT agents to review diagnostics, assign tickets, and post comments directly from the main list without losing page context.
 - **Dynamic SLA Breach Badges:** Color-coded countdown chips warning agents of approaching deadlines (4-hour window) and overdue states.
-- **Skill-Based Automatic Routing:** Automatically maps new tickets to available agents whose profile skills match the predicted category.
+- **Skill-Based Automatic Routing:** When enabled in Settings, new tickets go to the available agent whose skills include the ticket category and who has the fewest open tickets.
+- **Phone Layout:** On small screens the sidebar becomes a slide-in menu.
 
 ### 6. Multi-Theme & Modern Aesthetic System
 - **Minimalist Frameless Design:** Clean borderless authentication screens with high-contrast, professional typography.
@@ -216,11 +214,16 @@ DATABASE_URL="file:./dev.db"
 # JWT Secret for Session Cookie Encryption (min. 32 characters)
 SESSION_SECRET="super-secret-key-change-in-production-min-32-chars"
 
-# Google Gemini API Key (for automated triage, summaries, and translation)
+# Google Gemini API Key (triage suggestions, summaries, translation)
+# Get one at https://aistudio.google.com/apikey
 GEMINI_API_KEY="your-gemini-api-key-here"
+
+# Optional: override the models (e.g. when Google retires one)
+# GEMINI_MODEL="gemini-2.5-flash"
+# GEMINI_FALLBACK_MODEL="gemini-2.5-flash-lite"   # "none" to disable
 ```
 
-> **Note:** The application includes intelligent fallback heuristics. If `GEMINI_API_KEY` is not provided or quota is exceeded, the platform continues to function smoothly with local deterministic triage and translation algorithms.
+> **Without a key** the app still works: triage suggestions come from labelled keyword rules (if enabled in Settings), and summaries/translation report that AI is not configured. Google's free tier allows only a few requests per minute per model, which is why a fallback model is used.
 
 ---
 
@@ -244,6 +247,7 @@ npm install
 npx prisma db push
 
 # 4. Populate default database seed (Users, Categories, Seed Tickets #101-#108)
+#    Warning: this deletes existing users and tickets
 npm run db:seed
 
 # 5. Launch development server with Turbopack
@@ -252,11 +256,15 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+**Upgrading an existing database:** run `npx prisma db push`, then `npm run db:backfill-history` once to convert old audit-trail rows into translatable events.
+
+**Inviting users:** admins can invite a user from *User Management*. Until email is set up, the admin receives a one-time password to share; the user must choose their own password at first sign-in.
+
 ---
 
 ## 🧪 Automated Testing Suite
 
-The repository contains an automated test suite implemented with **Vitest**, providing comprehensive test coverage across 5 core enterprise domains:
+The repository contains an automated test suite implemented with **Vitest**. Integration tests run against the database with only the Next.js request context and the Gemini SDK stubbed; unit tests cover the AI wrapper, triage rules, skills and audit-trail events.
 
 ```bash
 # Execute test suite once
@@ -266,29 +274,53 @@ npm test
 npm run test:watch
 ```
 
-### Test Coverage Breakdown (37/37 Passing)
-
-Every test calls the real server actions, pages and API routes against the database; only the Next.js request context (session cookie, `redirect`, `notFound`) and the Gemini client are stubbed.
+### Test Coverage Breakdown (105/105 Passing)
 
 ```
-✓ tests/helpdesk.test.ts (37 tests)
-  ✓ Test 1: User Login (5 tests)
+✓ tests/ai-triage.test.ts (10 tests)
+  ✓ parseTriageResponse (4)
+    ✓ accepts a valid answer and cleans it up
+    ✓ rejects a category the admin has not configured
+    ✓ rejects an unknown priority
+    ✓ rejects an answer without self-help steps
+  ✓ ruleBasedTriage (6)
+    ✓ is always labelled as rules, never as AI
+    ✓ prefers the more specific rule ("network printer" is a printer issue)
+    ✓ matches English keywords on word boundaries only
+    ✓ understands Arabic tickets and answers in Arabic
+    ✓ raises priority to CRITICAL for outages affecting everyone
+    ✓ only suggests categories that exist in the admin settings
+✓ tests/gemini.test.ts (6 tests)
+  ✓ Gemini client (6)
+    ✓ treats the README placeholder key as not configured
+    ✓ falls back to the second model when the first is rate-limited
+    ✓ does not retry errors that another model would not fix
+    ✓ fails when every model is rate-limited, so callers can fall back honestly
+    ✓ disables thinking on 2.5 models for speed
+    ✓ rejects a triage answer with a category the admin does not have
+✓ tests/helpdesk.test.ts (72 tests)
+  ✓ Test 1: User Login (7)
     ✓ valid credentials create a session for the user and redirect to their tickets
     ✓ IT_SUPPORT is redirected to their assigned queue
     ✓ wrong password is rejected without creating a session
     ✓ unknown email gets the same generic error (no account enumeration)
+    ✓ "remember me" asks for a long-lived session, and email case does not matter
+    ✓ maintenance mode keeps everyone but admins out
     ✓ accounts pending approval cannot log in
-  ✓ Test 2: Ticket Creation (3 tests)
+  ✓ Test 2: Ticket Creation (5)
     ✓ creates an OPEN ticket with the next number, an SLA deadline and an audit entry
     ✓ rejects missing or too-short fields without creating a ticket
+    ✓ auto-assigns to a matching agent only when the admin setting is on
+    ✓ auto-assignment understands agents saved with the old skill names
     ✓ redirects signed-out users to the login page
-  ✓ Test 3: Role Authorization (5 tests)
+  ✓ Test 3: Role Authorization (6)
     ✓ EMPLOYEE cannot change ticket status
     ✓ EMPLOYEE cannot assign or take over tickets
     ✓ EMPLOYEE cannot promote themselves to ADMIN
     ✓ IT_SUPPORT cannot use admin-only actions
+    ✓ admins can only give agents skills that are real categories
     ✓ IT_SUPPORT cannot change the status of another agent's ticket
-  ✓ Test 4: Status Lifecycle State Machine (8 tests)
+  ✓ Test 4: Status Lifecycle State Machine (8)
     ✓ rejects skipping from OPEN to IN_PROGRESS
     ✓ rejects skipping from OPEN to RESOLVED
     ✓ rejects skipping from OPEN to CLOSED
@@ -297,7 +329,7 @@ Every test calls the real server actions, pages and API routes against the datab
     ✓ rejects going backwards from RESOLVED
     ✓ RESOLVED → CLOSED, after which every transition is rejected
     ✓ records each successful transition in the audit trail, and nothing for rejected ones
-  ✓ Test 5: Data Isolation (8 tests)
+  ✓ Test 5: Data Isolation (8)
     ✓ ticket list page shows an EMPLOYEE only their own tickets
     ✓ ticket list page shows IT_SUPPORT every ticket in the "all" queue
     ✓ ticket detail page returns 404 for another employee's ticket
@@ -306,22 +338,79 @@ Every test calls the real server actions, pages and API routes against the datab
     ✓ getTicketDetails returns any ticket, with internal notes, to IT_SUPPORT
     ✓ EMPLOYEE cannot comment on another employee's ticket
     ✓ EMPLOYEE comments are always public, even if they ask for an internal note
-  ✓ Test 6: API Authentication & Upload Safety (8 tests)
+  ✓ Test 6: API Authentication & Upload Safety (7)
     ✓ upload rejects unauthenticated requests
     ✓ upload rejects HTML and SVG files that browsers would execute
     ✓ upload rejects files larger than 10 MB
     ✓ upload rejects more than 5 files at once
     ✓ upload stores an allowed file under a random name with the server-side type
     ✓ AI triage route rejects unauthenticated requests without calling Gemini
-    ✓ AI translate route rejects unauthenticated requests without calling Gemini
     ✓ translateAction rejects unauthenticated callers without calling Gemini
+  ✓ Test 7: AI Features (6)
+    ✓ triage returns the Gemini answer labelled as AI
+    ✓ triage falls back to keyword rules, labelled as rules, when Gemini fails
+    ✓ triage returns 503 instead of guessing when the admin disabled the fallback
+    ✓ triage is refused when the admin turned AI triage off
+    ✓ ticket summaries are only available to IT support and admins
+    ✓ translation reports an honest error instead of inventing text
+  ✓ Test 8: SLA Tracking (5)
+    ✓ records when a ticket was resolved and that it met its SLA
+    ✓ flags a ticket resolved after its deadline as an SLA breach
+    ✓ records the close time, and reopening clears both times but keeps the breach
+    ✓ the admin "SLA breaches" view lists overdue and late-resolved tickets only
+    ✓ the "pending requests" link opens the users page filtered to pending accounts
+  ✓ Test 9: Admin Settings (10)
+    ✓ only admins can change settings
+    ✓ rejects an unknown priority
+    ✓ rejects negative SLA hours
+    ✓ rejects fractional SLA hours
+    ✓ rejects a malformed time
+    ✓ rejects hours that end before they start
+    ✓ rejects an invalid work day
+    ✓ rejects no categories
+    ✓ rejects a bad email
+    ✓ saves valid settings
+  ✓ Test 10: Invites & Passwords (10)
+    ✓ only admins can invite users
+    ✓ an invite creates an INVITED account and returns a one-time password
+    ✓ signing in with the temporary password forces a password change
+    ✓ the proxy keeps a user with a temporary password on the password page
+    ✓ rejects the change when the current password is wrong
+    ✓ rejects the change when the new password is too short
+    ✓ rejects the change when the confirmation does not match
+    ✓ rejects the change when the new password equals the old one
+    ✓ setting a password activates the account and continues into the app
+    ✓ any user can change their password later without being redirected
+✓ tests/history.test.ts (13 tests)
+  ✓ ticket audit trail (13)
+    ✓ stores the event, its data and an English sentence
+    ✓ shows events in the viewer’s language with translated statuses
+    ✓ has a translation for every event type in both languages
+    ✓ falls back to the stored text for rows without an event
+    ✓ recognises the old sentence "Ticket #101 created"
+    ✓ recognises the old sentence "System auto-assigned ticket to Bob Williams based on category (Email & Communication)"
+    ✓ recognises the old sentence "No available specialist found — ticket queued in unassigned"
+    ✓ recognises the old sentence "Status changed: ASSIGNED → IN_PROGRESS"
+    ✓ recognises the old sentence "Ticket claimed and status changed from OPEN to ASSIGNED"
+    ✓ recognises the old sentence "Reassigned from Bob to Mike by Admin User"
+    ✓ recognises the old sentence "Ticket reopened by requester. Reason: still broken"
+    ✓ recognises the old sentence "CSAT Rating submitted: 5 Stars"
+    ✓ round-trips: every sentence the app writes can be recognised again
+✓ tests/skills.test.ts (4 tests)
+  ✓ agent skills (4)
+    ✓ maps the old short names to the current category names and removes duplicates
+    ✓ survives empty or corrupt data
+    ✓ only keeps skills that are current categories
+    ✓ matches categories exactly, not as substrings of the JSON text
 ```
 
 ## ⚠️ Known Limitations
 
-1. **Advisory AI Triage:** AI category and priority suggestions are strictly assistive; final operational decisions remain with human operators.
-2. **Local Heuristic Fallback:** If the Gemini API key is missing or quota is exhausted, triage shifts to deterministic local rule matching.
-3. **Database Concurrency:** The system currently runs on SQLite via Prisma, which is optimal for assessment and moderate office loads. High-concurrency enterprise deployments should transition to PostgreSQL.
+1. **Advisory AI:** Suggestions and summaries assist people; they never change a ticket on their own.
+2. **No email yet:** Invites show a one-time password to the admin, and password resets are done by IT.
+3. **Sessions are not re-checked against the database:** a suspended user or a changed role takes effect at next sign-in (planned next).
+4. **SQLite and local file uploads:** fine for the assessment; a real deployment should use PostgreSQL and object storage. The SQLite migrations in `prisma/migrations` predate several schema changes, so set up with `prisma db push`.
+5. **Server error messages:** a few rare server-side errors (e.g., an invalid status transition) are still in English.
 ---
 
 ## 📂 Project Directory Structure
@@ -329,47 +418,38 @@ Every test calls the real server actions, pages and API routes against the datab
 ```
 smart-helpdesk/
 ├── app/
-│   ├── actions/               # Server Actions (auth, tickets, translate, admin)
-│   │   ├── auth.ts            # Authentication & session controllers
+│   ├── actions/               # Server Actions
+│   │   ├── auth.ts            # Login, register, logout
+│   │   ├── account.ts         # Change password (incl. first sign-in)
+│   │   ├── admin.ts           # Users: status, role & skills, invites
+│   │   ├── settings.ts        # Validated admin settings
 │   │   ├── tickets.ts         # Ticket CRUD & strict state machine
-│   │   └── translate.ts       # On-demand AI translation server action
-│   ├── admin/                 # Administrator portal
-│   │   ├── settings/          # System configuration, SLAs, and macros
-│   │   ├── tickets/           # Enterprise ticket oversight views
-│   │   └── users/             # User directory & approval management
+│   │   └── translate.ts       # On-demand AI translation
+│   ├── account/password/      # Change-password page
+│   ├── admin/                 # Administrator portal (settings, tickets, users)
 │   ├── api/                   # REST API routes
-│   │   ├── ai/                # Gemini AI triage, summary, and translation
-│   │   └── upload/            # File attachment handling
-│   ├── components/            # Reusable UI component library
-│   │   ├── AiTranslateButton.tsx # On-demand AI translation trigger & card
-│   │   ├── EmptyState.tsx     # Animated empty queue placeholders
-│   │   ├── LanguageSwitcher.tsx # Instant Arabic/English language toggle
-│   │   ├── ThemeSwitcher.tsx  # Palette & theme switcher dropdown
-│   │   └── TicketDrawer.tsx   # Fast slide-over agent triage drawer
-│   ├── login/                 # Frameless modern authentication page
-│   ├── register/              # Corporate account registration
-│   └── tickets/               # Core ticketing application
-│       ├── [id]/              # Ticket detail view with timeline & advisor
-│       ├── new/               # New ticket form with Gemini AI triage
-│       ├── layout.tsx         # Dashboard sidebar & top header shell
-│       ├── page.tsx           # Server component ticket data loader
-│       └── TicketListClient.tsx # Client dashboard with charts, stats & filters
+│   │   ├── ai/                # Gemini triage and ticket summaries
+│   │   └── upload/            # File attachments (type & size checked)
+│   ├── components/            # Shared UI (drawer, AI summary, translate button, responsive sidebar…)
+│   ├── login/                 # Sign-in page and walk-through
+│   ├── register/              # Account request
+│   └── tickets/               # Ticket list, detail page and new-ticket form
 ├── lib/
-│   ├── db.ts                  # Prisma Client singleton
-│   ├── gemini.ts              # Gemini API client, triage & translation logic
-│   ├── session.ts             # JWT session encoding/decoding via jose
-│   ├── utils.ts               # Date formatters, relative time & helpers
-│   └── i18n/                  # Localization engine
-│       ├── index.tsx          # Translation context provider & hooks
-│       └── locales/           # Typed bilingual dictionaries (en.ts, ar.ts)
+│   ├── ai/triage.ts           # AI answer validation + labelled keyword fallback
+│   ├── gemini.ts              # Gemini client: model fallback, triage, summaries, translation
+│   ├── history.ts             # Typed audit-trail events and their display
+│   ├── session.ts             # JWT session cookie via jose
+│   ├── settings.ts / skills.ts / sla.ts / uploads.ts
+│   └── i18n/                  # Arabic/English dictionaries and provider
 ├── prisma/
-│   ├── schema.prisma          # Database models, relations & indexes
-│   ├── seed.ts                # TypeScript seed script
-│   └── dev.db                 # Local SQLite database instance
+│   ├── schema.prisma          # Database models
+│   └── seed.ts                # Demo data
+├── proxy.ts                   # Route protection (roles, forced password change)
 ├── scripts/
-│   └── seed.js                # Cross-platform TypeScript transpiled seeder
-├── tests/
-│   └── helpdesk.test.ts       # 37 Vitest integration & unit tests
+│   ├── run-ts.js              # Run TypeScript files with plain Node
+│   ├── seed.js                # npm run db:seed
+│   └── backfill-history-events.ts # One-off audit-trail conversion
+├── tests/                     # 105 Vitest tests (5 files)
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
@@ -384,13 +464,13 @@ smart-helpdesk/
 | **Role-Based Authentication** | JWT with `jose`, bcrypt hashing, dual role enforcement (`EMPLOYEE`, `IT_SUPPORT`, `ADMIN`) | ✅ Complete |
 | **Data Isolation** | Employees restricted to own tickets; IT/Admin view entire queue; verified via 8 automated tests | ✅ Complete |
 | **Ticket Lifecycle Machine** | `OPEN → ASSIGNED → IN_PROGRESS → RESOLVED → CLOSED`; invalid/backward transitions rejected | ✅ Complete |
-| **Audit Logging** | Every status transition logged in `TicketHistory` with actor ID and timestamp | ✅ Complete |
-| **AI Copilot & Triage** | Google Gemini 2.0 Flash predicts category, priority, and self-help with explicit Accept/Dismiss UI | ✅ Complete |
-| **On-Demand AI Translation** | Zendesk-style inline translation for tickets & comments via Gemini with local fallbacks | ✅ Complete |
+| **Audit Logging** | Every status change, assignment and comment logged in `TicketHistory` as a typed, translatable event | ✅ Complete |
+| **AI Copilot & Triage** | Gemini suggests category, priority and self-help (schema-validated, Accept/Dismiss); summaries for IT staff | ✅ Complete |
+| **On-Demand AI Translation** | Inline translation of tickets & comments into the viewer's language; clear error when AI is unavailable | ✅ Complete |
 | **Bilingual Localization** | Native Arabic (RTL) & English (LTR) language support with persistent cookies/localStorage | ✅ Complete |
-| **Analytics Dashboard** | 6 live KPI cards, SLA countdown badges, and Recharts queue distribution visualization | ✅ Complete |
+| **Analytics Dashboard** | KPI cards, SLA countdown badges and status chart; the list refreshes every 30s | ✅ Complete |
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
-| **Automated Testing** | 37 automated unit & integration tests passing with 100% success rate | ✅ Complete |
+| **Automated Testing** | 105 unit & integration tests against the real code, all passing | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
 
 ---

@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { TICKET_CATEGORIES } from '@/lib/constants'
-import { formatRelativeTime } from '@/lib/utils'
+import { formatRelativeTime, formatTicketNumber } from '@/lib/utils'
 import EmptyState from '@/app/components/EmptyState'
 import TicketDrawer from '@/app/components/TicketDrawer'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -897,7 +897,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
     <div className="flex items-start justify-between gap-2 mb-3">
       <div className="flex flex-col gap-1.5">
         <span className="font-mono text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-md w-fit border border-border">
-          #TICK-{(ticket.ticketNumber || 0).toString().padStart(3, '0')}
+          #{formatTicketNumber(ticket.ticketNumber)}
         </span>
         <h3 className="font-bold text-base text-foreground leading-tight line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
           {ticket.title}
@@ -989,7 +989,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
   border: '1px solid var(--border)',
   }}
   >
-  #TICK-{(ticket.ticketNumber || 0).toString().padStart(3, '0')}
+  #{formatTicketNumber(ticket.ticketNumber)}
   </span>
   <span
   className="text-[11px] font-medium px-2 py-0.5 rounded-md"

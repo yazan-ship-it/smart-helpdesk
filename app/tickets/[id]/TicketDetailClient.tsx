@@ -23,17 +23,15 @@ import {
  PlusCircle,
  FileText,
  Loader2,
- Sparkles,
- Bot,
- Lightbulb,
   Lock,
   AlertCircle,
 } from 'lucide-react'
 import { updateTicketStatus, assignTicket, addComment, takeOverTicket, confirmTicketResolution, reopenTicket, submitCsatRating } from '@/app/actions/tickets'
-import { formatRelativeTime } from '@/lib/utils'
+import { formatRelativeTime, formatTicketNumber } from '@/lib/utils'
 import { SlaBadge } from '@/components/SlaBadge'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
 import AiTranslateButton from '@/app/components/AiTranslateButton'
+import AiTicketSummary from '@/app/components/AiTicketSummary'
 
 type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -135,69 +133,6 @@ function getInitials(name: string) {
  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-// Contextual AI recommendation generator based on ticket details
-function getSmartAiAdvice(category: string, title: string, locale: 'en' | 'ar' = 'en') {
-  const lowerCat = category.toLowerCase()
-  if (lowerCat.includes('network')) {
-    return {
-      confidence: locale === 'ar' ? 'نسبة الثقة 98.5%' : '98.5% Confidence',
-      summary: locale === 'ar' ? 'تم رصد ازدحام في بوابة الشبكة والشبكة الفرعية' : 'Network Subnet & Gateway Congestion Detected',
-      steps: locale === 'ar' ? [
-        'تفريغ ذاكرة التخزين المؤقت لـ DNS وفحص اتصال TCP بالبوابة الافتراضية.',
-        'التحقق من انتهاء صلاحية مفاتيح التشفير لاتصال VPN وضبط حجم حزم MTU.',
-        'التأكد من توجيه جداول المسارات الخاصة بالشبكة الفرعية VLAN بشكل صحيح.',
-      ] : [
-        'Flush local DNS cache and test TCP handshake on default gateway.',
-        'Verify WireGuard/IPsec peer key expiration and MTU packet clamping.',
-        'Ensure subnet routing tables for VLAN 12 are properly propagated.',
-      ],
-    }
-  }
-  if (lowerCat.includes('hardware')) {
-    return {
-      confidence: locale === 'ar' ? 'نسبة الثقة 97.9%' : '97.9% Confidence',
-      summary: locale === 'ar' ? 'مطلوب فحص تشخيصي للمكونات المادية' : 'Physical Component Diagnostic Required',
-      steps: locale === 'ar' ? [
-        'فحص المقاييس الحرارية للنظام وسرعات مراوح التبريد.',
-        'إجراء فحص S.M.A.R.T للذاكرة العشوائية ووحدات التخزين.',
-        'التحقق من استقرار تغذية الطاقة تحت أقصى حمل تشغيلي.',
-      ] : [
-        'Inspect system thermal metrics and sensor fan speeds.',
-        'Run memory and storage S.M.A.R.T diagnostic scan.',
-        'Check power supply rail stability under peak workload.',
-      ],
-    }
-  }
-  if (lowerCat.includes('access') || lowerCat.includes('security')) {
-    return {
-      confidence: locale === 'ar' ? 'نسبة الثقة 99.2%' : '99.2% Confidence',
-      summary: locale === 'ar' ? 'مراجعة إدارة الهوية والصلاحيات (IAM)' : 'Identity & Access Management Review',
-      steps: locale === 'ar' ? [
-        'فحص مزامنة عضوية المجموعات في Azure AD أو Okta.',
-        'التحقق من حالة المصادقة الثنائية (MFA) وإلغاء جلسات العمل القديمة.',
-        'إصدار صلاحيات مؤقتة مرتفعة بعد اعتماد مسؤول النظام.',
-      ] : [
-        'Check Okta / Azure AD group membership synchronization.',
-        'Verify MFA challenge status and revoke stale active session tokens.',
-        'Issue temporary elevated credential lease via PAM approval.',
-      ],
-    }
-  }
-  return {
-    confidence: locale === 'ar' ? 'نسبة الثقة 98.2%' : '98.2% Confidence',
-    summary: locale === 'ar' ? 'توصيات المعالجة التلقائية للتطبيق' : 'Automated Application Triage Recommendation',
-    steps: locale === 'ar' ? [
-      'فحص نقاط نهاية الخدمة ومراجعة سجلات الأخطاء لآخر تحديث برمجيات.',
-      'إعادة توثيق رمز ترخيص المستخدم في موفر الهوية المؤسسي.',
-      'إعادة تعيين ذاكرة التخزين المؤقت للعميل وإعادة تشغيل التطبيق.',
-    ] : [
-      'Check service endpoint health and inspect recent deployment error traces.',
-      'Re-authenticate user license token in enterprise identity provider.',
-      'Reset local client cache and restart application daemon.',
-    ],
-  }
-}
-
 export default function TicketDetailClient({
   ticket,
   itAgents,
@@ -206,7 +141,7 @@ export default function TicketDetailClient({
   currentUserRole,
 }: Props) {
  const router = useRouter()
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
  const [commentText, setCommentText] = useState('')
  const [isInternalNote, setIsInternalNote] = useState(false)
  const [activeTab, setActiveTab] = useState<'all' | 'comments' | 'history'>('all')
@@ -343,13 +278,10 @@ export default function TicketDetailClient({
  }
  }
 
- // Contextual AI advice
- const aiAdvice = getSmartAiAdvice(ticket.category, ticket.title, locale)
-
  // Insert AI suggestion into comment box
  const handleInsertAiSuggestion = (suggestion: string) => {
  setCommentText((prev) => (prev ? `${prev}\n\n${suggestion}` : suggestion))
- toast.info(locale === 'ar' ? 'تم نسخ توصية الذكاء الاصطناعي إلى مسودة الرد' : 'AI recommendation copied into comment draft')
+ toast.info(t('ai.insertedIntoReply'))
  }
 
  // Unified activity timeline list
@@ -392,7 +324,7 @@ export default function TicketDetailClient({
  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
  >
  <ArrowLeft className="w-3.5 h-3.5" />
- <span>Back to all tickets</span>
+ <span>{t('tickets.backToAllTickets')}</span>
  </Link>
 
  <button
@@ -579,7 +511,7 @@ export default function TicketDetailClient({
  <div>
  <div className="flex items-center gap-2.5 mb-2 flex-wrap">
  <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-muted text-foreground border border-border">
- #{ticket.id.slice(-6).toUpperCase()}
+ #{formatTicketNumber(ticket.ticketNumber)}
  </span>
  <span className="badge badge-category">{getCategoryLabel(ticket.category, locale)}</span>
  <span className={priorityBadgeClass(ticket.priority)}>
@@ -634,79 +566,7 @@ export default function TicketDetailClient({
  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
  {/* LEFT 2 COLUMNS: AI WIDGET + DESCRIPTION + TIMELINE */}
  <div className="lg:col-span-2 space-y-6">
- {/* 1. AI TRIAGE INSIGHT BANNER WIDGET */}
- <div className="rounded-2xl border border-indigo-500/30 bg-card dark:bg-card p-5 shadow-sm relative overflow-hidden backdrop-blur-md">
- <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-border pointer-events-none" />
-
- <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border mb-3.5">
- <div className="flex items-center gap-2">
- <div className="w-7 h-7 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-700 dark:text-indigo-400">
- <Sparkles className="w-3.5 h-3.5 animate-pulse" />
- </div>
- <div>
- <span className="text-xs font-bold text-foreground tracking-wide block">
- {locale === 'ar' ? 'التشخيص الذكي والمعاينة الأولية عبر Gemini' : 'Gemini 3.8 AI Diagnostic & Triage Preview'}
- </span>
- <span className="text-[11px] text-muted-foreground">
- {locale === 'ar' ? 'تصنيف الحوادث الدلالي التلقائي' : 'Automated semantic incident classification'}
- </span>
- </div>
- </div>
-
- <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border border-border text-[11px] font-mono font-semibold self-start sm:self-auto">
- <Bot className="w-3 h-3 text-emerald-800 dark:text-emerald-300" />
- {aiAdvice.confidence}
- </span>
- </div>
-
- {/* Recommendation Content */}
- <div className="space-y-3">
- <div className="flex items-start gap-2.5 text-xs text-foreground">
- <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
- <div>
- <p className="font-semibold text-foreground">
- {locale === 'ar' ? 'فرضية السبب الجذري: ' : 'Root Cause Hypothesis: '}{aiAdvice.summary}
- </p>
- <p className="text-muted-foreground mt-0.5">
- {locale === 'ar' ? 'مطابقة التصنيف والأولوية وفقاً للأنماط المعتمدة في سجلات حلول المؤسسة.' : 'Classified category & priority match verified patterns from enterprise resolution logs.'}
- </p>
- </div>
- </div>
-
- <div className="p-3 rounded-xl bg-background border border-border space-y-1.5">
- <span className="text-[11px] uppercase tracking-wider font-semibold text-indigo-800 dark:text-indigo-300 block">
- {locale === 'ar' ? 'خطوات الحل الموصى بها:' : 'RECOMMENDED RESOLUTION STEPS:'}
- </span>
- <ul className="space-y-1 text-xs text-foreground">
- {aiAdvice.steps.map((step, idx) => (
- <li key={idx} className="flex items-start gap-2">
- <span className="text-indigo-700 dark:text-indigo-400 font-mono text-[11px] shrink-0">
- {idx + 1}.
- </span>
- <span>{step}</span>
- </li>
- ))}
- </ul>
- </div>
-
- <div className="flex items-center justify-between pt-1 text-xs">
- <span className="text-[11px] text-muted-foreground">
- {locale === 'ar' ? 'تم التحقق وفقاً لأفضل ممارسات ITIL القياسية' : 'Verified against standard ITIL incident response playbooks'}
- </span>
- <button
- type="button"
- onClick={() =>
- handleInsertAiSuggestion(
- `AI Diagnostic Summary:\n${aiAdvice.steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
- )
- }
- className="text-xs text-indigo-700 dark:text-indigo-400 hover:text-indigo-800 dark:text-indigo-300 font-medium cursor-pointer transition-colors"
- >
- {locale === 'ar' ? '+ نسخ إلى مسودة الرد' : '+ Copy to reply draft'}
- </button>
- </div>
- </div>
- </div>
+ {isITSupport && <AiTicketSummary ticketId={ticket.id} onInsert={handleInsertAiSuggestion} />}
 
  {/* 2. TICKET DESCRIPTION CARD */}
  <div className="card p-6 border-border bg-card backdrop-blur-md">

@@ -4,7 +4,7 @@ import { useState, useEffect, useEffectEvent, useTransition, useRef } from 'reac
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ExternalLink, MessageSquare, Clock, User, AlertTriangle, Send, RefreshCw, Sparkles, Layers } from 'lucide-react'
-import { formatRelativeTime } from '@/lib/utils'
+import { formatRelativeTime, formatTicketNumber } from '@/lib/utils'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { getTicketDetails, updateTicketStatus, addComment, takeOverTicket } from '@/app/actions/tickets'
@@ -202,7 +202,7 @@ export default function TicketDrawer({
                 </button>
                 {ticket && (
                   <span className="font-mono text-sm font-semibold text-muted-foreground">
-                    #TICK-{(ticket.ticketNumber || 0).toString().padStart(3, '0')}
+                    #{formatTicketNumber(ticket.ticketNumber)}
                   </span>
                 )}
               </div>

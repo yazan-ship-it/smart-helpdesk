@@ -2,6 +2,15 @@ import { notFound } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import TicketDetailClient, { type TicketDetailData } from './TicketDetailClient'
+import type { Metadata } from 'next'
+import { formatTicketNumber } from '@/lib/utils'
+
+// Only the ticket number, so the tab title never reveals ticket content
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const ticket = await prisma.ticket.findUnique({ where: { id }, select: { ticketNumber: true } })
+  return { title: ticket ? `#${formatTicketNumber(ticket.ticketNumber)}` : 'Ticket' }
+}
 
 export default async function TicketDetailPage({
  params,

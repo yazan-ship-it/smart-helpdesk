@@ -34,3 +34,8 @@ export function formatRelativeTime(dateStr: string | Date, locale: 'en' | 'ar' =
   
   return date.toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined }) + (locale === 'ar' ? ` في ${timeString}` : ` at ${timeString}`)
 }
+
+/** The one display format for ticket numbers, e.g. 105 → "TICK-105". */
+export function formatTicketNumber(ticketNumber: number): string {
+  return `TICK-${String(ticketNumber).padStart(3, '0')}`
+}

@@ -32,6 +32,7 @@ vi.mock('@/lib/gemini', () => ({
 // Pages are called directly; their client components only receive props.
 vi.mock('@/app/tickets/TicketListClient', () => ({ default: () => null }))
 vi.mock('@/app/tickets/[id]/TicketDetailClient', () => ({ default: () => null }))
+vi.mock('@/app/admin/users/AdminUsersClient', () => ({ default: () => null }))
 
 import { unlink } from 'fs/promises'
 import path from 'path'
@@ -43,6 +44,8 @@ import { login } from '@/app/actions/auth'
 import {
   createTicket,
   updateTicketStatus,
+  confirmTicketResolution,
+  reopenTicket,
   assignTicket,
   takeOverTicket,
   reassignTicket,
@@ -53,6 +56,8 @@ import { updateUserRole, updateUserStatus } from '@/app/actions/admin'
 import { translateAction } from '@/app/actions/translate'
 import TicketsPage from '@/app/tickets/page'
 import TicketDetailPage from '@/app/tickets/[id]/page'
+import AdminTicketsPage from '@/app/admin/tickets/page'
+import AdminUsersPage from '@/app/admin/users/page'
 import { POST as uploadPOST } from '@/app/api/upload/route'
 import { POST as triagePOST } from '@/app/api/ai/triage/route'
 import { POST as summarizePOST } from '@/app/api/ai/summarize/[id]/route'
@@ -88,7 +93,10 @@ async function createUser(name: string, email: string, role: Role, accountStatus
   return user.id
 }
 
-async function createTestTicket(createdById: string, data: { status?: string; assignedToId?: string } = {}) {
+async function createTestTicket(
+  createdById: string,
+  data: { status?: string; assignedToId?: string; slaDeadline?: Date; slaBreached?: boolean } = {}
+) {
   const last = await prisma.ticket.findFirst({ orderBy: { ticketNumber: 'desc' }, select: { ticketNumber: true } })
   const ticket = await prisma.ticket.create({
     data: {
@@ -650,5 +658,72 @@ describe('Test 7: AI Features', () => {
 
     vi.mocked(translateText).mockResolvedValueOnce('مرحبا')
     expect(await translateAction({ text: 'hello', targetLanguage: 'Arabic' })).toEqual({ success: true, translation: 'مرحبا' })
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 8: SLA Tracking — resolution times, breaches, admin filters
+// ────────────────────────────────────────────────────────
+describe('Test 8: SLA Tracking', () => {
+  const hoursFromNow = (h: number) => new Date(Date.now() + h * 3_600_000)
+  const resolve = async (ticketId: string) => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    for (const to of ['ASSIGNED', 'IN_PROGRESS', 'RESOLVED'] as const) {
+      expect(await updateTicketStatus(ticketId, to)).toEqual({})
+    }
+    return prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })
+  }
+
+  it('records when a ticket was resolved and that it met its SLA', async () => {
+    const id = await createTestTicket(employeeId, { slaDeadline: hoursFromNow(24) })
+    const ticket = await resolve(id)
+    expect(ticket.resolvedAt).not.toBeNull()
+    expect(ticket.slaBreached).toBe(false)
+  })
+
+  it('flags a ticket resolved after its deadline as an SLA breach', async () => {
+    const id = await createTestTicket(employeeId, { slaDeadline: hoursFromNow(-2) })
+    expect((await resolve(id)).slaBreached).toBe(true)
+  })
+
+  it('records the close time, and reopening clears both times but keeps the breach', async () => {
+    const id = await createTestTicket(employeeId, { slaDeadline: hoursFromNow(-2) })
+    await resolve(id)
+    signInAs(employeeId, 'EMPLOYEE')
+    expect(await confirmTicketResolution(id)).toEqual({})
+    const closed = await prisma.ticket.findUniqueOrThrow({ where: { id } })
+    expect(closed.closedAt).not.toBeNull()
+
+    expect(await reopenTicket(id, 'It broke again this morning')).toEqual({})
+    const reopened = await prisma.ticket.findUniqueOrThrow({ where: { id } })
+    expect(reopened).toMatchObject({ resolvedAt: null, closedAt: null, slaBreached: true })
+  })
+
+  it('the admin "SLA breaches" view lists overdue and late-resolved tickets only', async () => {
+    const overdue = await createTestTicket(employeeId, { slaDeadline: hoursFromNow(-1) })
+    const onTrack = await createTestTicket(employeeId, { slaDeadline: hoursFromNow(5) })
+    const resolvedLate = await createTestTicket(employeeId, { status: 'RESOLVED', slaDeadline: hoursFromNow(-9), slaBreached: true })
+    const resolvedOnTime = await createTestTicket(employeeId, { status: 'RESOLVED', slaDeadline: hoursFromNow(-9) })
+
+    signInAs(adminId, 'ADMIN')
+    type Props = { tickets: { id: string }[]; slaBreachedOnly: boolean }
+    const page = (await AdminTicketsPage({ searchParams: Promise.resolve({ filter: 'sla_breached' }) })) as ReactElement<Props>
+    const ids = page.props.tickets.map((t) => t.id)
+    expect(page.props.slaBreachedOnly).toBe(true)
+    expect(ids).toEqual(expect.arrayContaining([overdue, resolvedLate]))
+    expect(ids).not.toContain(onTrack)
+    expect(ids).not.toContain(resolvedOnTime)
+
+    const all = (await AdminTicketsPage({ searchParams: Promise.resolve({}) })) as ReactElement<Props>
+    expect(all.props.tickets.map((t) => t.id)).toContain(onTrack)
+  })
+
+  it('the "pending requests" link opens the users page filtered to pending accounts', async () => {
+    signInAs(adminId, 'ADMIN')
+    type Props = { initialStatus: string }
+    const pending = (await AdminUsersPage({ searchParams: Promise.resolve({ status: 'PENDING' }) })) as ReactElement<Props>
+    expect(pending.props.initialStatus).toBe('PENDING')
+    const junk = (await AdminUsersPage({ searchParams: Promise.resolve({ status: 'HACKED' }) })) as ReactElement<Props>
+    expect(junk.props.initialStatus).toBe('')
   })
 })

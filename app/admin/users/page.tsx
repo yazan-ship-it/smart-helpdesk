@@ -4,7 +4,11 @@ import AdminUsersClient from './AdminUsersClient'
 
 export const metadata = { title: 'User Management | Admin' }
 
-export default async function AdminUsersPage() {
+const ACCOUNT_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED', 'INVITED']
+
+export default async function AdminUsersPage(props: { searchParams: Promise<{ status?: string }> }) {
+  const { status } = await props.searchParams
+  const initialStatus = status && ACCOUNT_STATUSES.includes(status) ? status : ''
   const users = await prisma.user.findMany({
     orderBy: { createdAt: 'desc' },
     select: {
@@ -37,6 +41,9 @@ export default async function AdminUsersPage() {
 
   return (
     <AdminUsersClient
+      // Remount when the sidebar link changes ?status=, so the filter follows the URL
+      key={initialStatus}
+      initialStatus={initialStatus}
       users={users.map((u) => ({
         ...u,
         createdAt: u.createdAt.toISOString(),

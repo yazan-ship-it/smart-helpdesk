@@ -2,10 +2,13 @@ import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import TicketListClient from '@/app/tickets/TicketListClient'
+import { slaBreachedWhere } from '@/lib/sla'
 
 export const metadata = { title: 'All Tickets | Admin' }
 
-export default async function AdminTicketsPage() {
+export default async function AdminTicketsPage(props: { searchParams: Promise<{ filter?: string }> }) {
+  const { filter } = await props.searchParams
+  const slaBreachedOnly = filter === 'sla_breached'
   const session = await getSession()
   
   if (!session || session.role !== 'ADMIN') {
@@ -13,6 +16,7 @@ export default async function AdminTicketsPage() {
   }
 
   const tickets = await prisma.ticket.findMany({
+    where: slaBreachedOnly ? slaBreachedWhere() : undefined,
     include: {
       createdBy: { select: { name: true } },
       assignedTo: { select: { name: true } },
@@ -45,6 +49,7 @@ export default async function AdminTicketsPage() {
       activeQueue={undefined}
       agents={agents}
       isAdminView={true}
+      slaBreachedOnly={slaBreachedOnly}
     />
   )
 }

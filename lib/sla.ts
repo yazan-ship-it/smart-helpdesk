@@ -147,3 +147,33 @@ export function getSlaStatus(deadline: Date, now: Date = new Date(), locale: 'en
     minutesLeft: diffMinutes
   };
 }
+
+const SLA_STOPPED = ['RESOLVED', 'CLOSED']
+
+/** Prisma `where` for tickets that missed their SLA: resolved late, or still open past the deadline. */
+export function slaBreachedWhere(now: Date = new Date()) {
+  return {
+    OR: [{ slaBreached: true }, { status: { notIn: SLA_STOPPED }, slaDeadline: { lt: now } }],
+  }
+}
+
+/**
+ * Fields to store when a ticket moves to `status`: when it was resolved/closed,
+ * and whether that happened after the SLA deadline. Reopening clears the
+ * timestamps but keeps a breach that already happened.
+ */
+export function statusChangeFields(
+  ticket: { slaDeadline: Date | null; resolvedAt: Date | null; slaBreached: boolean },
+  status: string,
+  now: Date = new Date(),
+) {
+  if (SLA_STOPPED.includes(status)) {
+    const resolvedAt = ticket.resolvedAt ?? now
+    return {
+      resolvedAt,
+      closedAt: status === 'CLOSED' ? now : null,
+      slaBreached: ticket.slaBreached || (ticket.slaDeadline !== null && resolvedAt > ticket.slaDeadline),
+    }
+  }
+  return { resolvedAt: null, closedAt: null }
+}

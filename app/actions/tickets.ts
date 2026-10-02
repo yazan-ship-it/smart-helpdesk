@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { getSession } from '@/lib/session'
 import { resolveAutoAssignment, type DispatchResult } from '@/lib/services/assignment'
-import { calculateBusinessHoursDeadline } from '@/lib/sla'
+import { calculateBusinessHoursDeadline, statusChangeFields } from '@/lib/sla'
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
@@ -181,7 +181,7 @@ export async function updateTicketStatus(ticketId: string, newStatus: Status): P
 
   await prisma.ticket.update({
     where: { id: ticketId },
-    data: updateData,
+    data: { ...updateData, ...statusChangeFields(ticket, newStatus) },
   })
 
   await prisma.ticketHistory.create({
@@ -477,7 +477,7 @@ export async function confirmTicketResolution(ticketId: string): Promise<{ error
     where: { id: ticketId },
     data: {
       status: 'CLOSED',
-      closedAt: new Date()
+      ...statusChangeFields(ticket, 'CLOSED'),
     }
   })
 
@@ -517,6 +517,7 @@ export async function reopenTicket(ticketId: string, reason: string): Promise<{ 
     where: { id: ticketId },
     data: {
       status: newStatus,
+      ...statusChangeFields(ticket, newStatus),
     }
   })
 

@@ -151,6 +151,10 @@ export const ar: TranslationDictionary = {
   },
   // Tickets Specific
   tickets: {
+    slaBreachedOnly: 'يتم عرض التذاكر التي تجاوزت اتفاقية الخدمة فقط: التي حُلّت متأخرة أو لا تزال مفتوحة بعد الموعد.',
+    showAllTickets: 'عرض كل التذاكر',
+    slaMissed: 'تم تجاوز الـ SLA',
+    slaMet: 'تم الحل ضمن الـ SLA',
     createNew: 'تذكرة جديدة',
     searchTickets: 'البحث في التذاكر...',
     searchPlaceholder: 'البحث بالعنوان، رقم التذكرة، مقدم الطلب...',

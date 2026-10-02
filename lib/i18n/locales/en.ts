@@ -149,6 +149,10 @@ export const en = {
   },
   // Tickets Specific
   tickets: {
+    slaBreachedOnly: 'Showing only tickets that missed their SLA: resolved late, or still open past the deadline.',
+    showAllTickets: 'Show all tickets',
+    slaMissed: 'SLA missed',
+    slaMet: 'Resolved within SLA',
     createNew: 'New Ticket',
     searchTickets: 'Search tickets...',
     searchPlaceholder: 'Search by title, ticket ID, requester…',

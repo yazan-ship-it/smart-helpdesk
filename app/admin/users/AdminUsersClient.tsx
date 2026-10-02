@@ -54,6 +54,8 @@ type Props = {
   counts: { total: number; pending: number; approved: number; rejected: number; suspended: number; invited: number }
   /** Ticket categories; agent skills are chosen from these */
   categories: string[]
+  /** Account-status filter from the URL (?status=PENDING from the sidebar) */
+  initialStatus?: string
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -363,11 +365,11 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
 }
 
 // ── Main Client Component ─────────────────────────────────────────────────────
-export default function AdminUsersClient({ users, counts, categories }: Props) {
+export default function AdminUsersClient({ users, counts, categories, initialStatus = '' }: Props) {
   const router = useRouter()
   const { locale } = useTranslation()
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus)
   const [roleFilter, setRoleFilter] = useState<string>('')
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())

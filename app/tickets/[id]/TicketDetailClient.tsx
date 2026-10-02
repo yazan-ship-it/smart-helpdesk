@@ -538,6 +538,11 @@ export default function TicketDetailClient({
  {ticket.slaDeadline && ticket.status !== 'CLOSED' && ticket.status !== 'RESOLVED' && (
    <SlaBadge deadline={ticket.slaDeadline} />
  )}
+ {ticket.slaDeadline && (ticket.status === 'RESOLVED' || ticket.status === 'CLOSED') && (
+   <span className={`badge ${ticket.slaBreached ? 'badge-critical' : 'badge-resolved'}`}>
+     {ticket.slaBreached ? t('tickets.slaMissed') : t('tickets.slaMet')}
+   </span>
+ )}
  </div>
 
  <h1 className="text-3xl font-extrabold tracking-tight text-foreground">

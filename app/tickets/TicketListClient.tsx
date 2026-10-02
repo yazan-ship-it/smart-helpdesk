@@ -72,6 +72,8 @@ type Props = {
   activeQueue?: 'assigned_to_me' | 'all'
   agents?: { id: string; name: string }[]
   isAdminView?: boolean
+  /** Admin "SLA breaches" view: the server already filtered the tickets */
+  slaBreachedOnly?: boolean
 }
 
 const STATUS_FILTERS: { label: string; value: string }[] = [
@@ -183,7 +185,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
   return tCat.includes(fCat) || fCat.includes(tCat);
 }
 
- function TicketListClientContent({ tickets, role, currentUserId, totalTicketCount, assignedToMeCount, activeQueue, agents, isAdminView }: Props) {
+ function TicketListClientContent({ tickets, role, currentUserId, totalTicketCount, assignedToMeCount, activeQueue, agents, isAdminView, slaBreachedOnly }: Props) {
   const { t, locale } = useTranslation()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -403,6 +405,17 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  </div>
 
  <div className="page-content space-y-6">
+      {slaBreachedOnly && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-red-500/30 bg-red-500/5 text-sm">
+          <span className="flex items-center gap-2 text-red-700 dark:text-red-300 font-medium">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {t('tickets.slaBreachedOnly')}
+          </span>
+          <Link href="/admin/tickets" className="text-xs font-semibold underline">
+            {t('tickets.showAllTickets')}
+          </Link>
+        </div>
+      )}
        {/* ─── 0. IT SUPPORT QUEUE SWITCHER TABS ───────────────── */}
       {role === 'IT_SUPPORT' && (
         <div className="flex items-center gap-2 p-1 bg-muted/60 dark:bg-muted/30 rounded-2xl border border-border w-fit">

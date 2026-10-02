@@ -61,6 +61,8 @@ import {
 import { inviteUser, updateUserRole, updateUserStatus } from '@/app/actions/admin'
 import { changePassword } from '@/app/actions/account'
 import proxy from '@/proxy'
+import { checkSession } from '@/lib/session-check'
+import { getDemoAccounts } from '@/lib/demo'
 import { translateAction } from '@/app/actions/translate'
 import { updateSettings, type SettingsInput } from '@/app/actions/settings'
 import TicketsPage from '@/app/tickets/page'
@@ -159,7 +161,7 @@ describe('Test 1: User Login', () => {
       /^NEXT_REDIRECT \/tickets$/
     )
     expect(createSession).toHaveBeenCalledWith(
-      { userId: employeeId, role: 'EMPLOYEE', name: 'Test Employee', email: employeeEmail, mustChangePassword: false },
+      { userId: employeeId, role: 'EMPLOYEE', name: 'Test Employee', email: employeeEmail, mustChangePassword: false, sessionVersion: 0 },
       { remember: false },
     )
     const user = await prisma.user.findUnique({ where: { id: employeeId } })
@@ -902,5 +904,97 @@ describe('Test 10: Invites & Passwords', () => {
   it('any user can change their password later without being redirected', async () => {
     signInAs(invitedId, 'EMPLOYEE', 'New Starter')
     expect(await changePassword(undefined, passwordForm('my-own-password', 'another-password'))).toEqual({ success: true })
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 11: Sessions — a signed cookie is re-checked against the database
+// ────────────────────────────────────────────────────────
+describe('Test 11: Sessions', () => {
+  let userId: string
+  const token = (extra: Partial<SessionPayload> = {}) =>
+    ({ userId, role: 'EMPLOYEE', name: 'Session User', email: 'x', sessionVersion: 0, ...extra }) as SessionPayload
+  const visit = async (path: string, payload: SessionPayload | null) => {
+    vi.mocked(decrypt).mockResolvedValue(payload)
+    return proxy(new NextRequest(`http://localhost${path}`, { headers: { cookie: 'helpdesk-session=signed' } }))
+  }
+  const setUser = (data: { role?: string; accountStatus?: string }) => prisma.user.update({ where: { id: userId }, data })
+
+  beforeAll(async () => {
+    userId = await createUser('Session User', `test-session-${stamp}@test.com`, 'EMPLOYEE')
+  })
+
+  it('an active user keeps their session, with role and name read from the database', async () => {
+    await setUser({ role: 'IT_SUPPORT' })
+    const check = await checkSession(token({ role: 'ADMIN', name: 'Old Name' }))
+    expect(check).toMatchObject({ session: { userId, role: 'IT_SUPPORT', name: 'Session User', mustChangePassword: false } })
+    await setUser({ role: 'EMPLOYEE' })
+  })
+
+  it('a role taken away ends admin access on the next request', async () => {
+    const res = await visit('/admin/users', token({ role: 'ADMIN' }))
+    expect(res.headers.get('location')).toBe('http://localhost/tickets')
+  })
+
+  it.each([
+    ['SUSPENDED', 'suspended'],
+    ['REJECTED', 'rejected'],
+    ['PENDING', 'pending'],
+  ])('a %s account is signed out and told why', async (status, reason) => {
+    await setUser({ accountStatus: status })
+    try {
+      expect(await checkSession(token())).toEqual({ ended: reason })
+      const res = await visit('/tickets', token())
+      expect(res.headers.get('location')).toBe(`http://localhost/login?reason=${reason}`)
+      expect(res.headers.get('set-cookie')).toMatch(/helpdesk-session=;.*Expires=Thu, 01 Jan 1970/i)
+    } finally {
+      await setUser({ accountStatus: 'APPROVED' })
+    }
+  })
+
+  it('a deleted account is signed out', async () => {
+    expect(await checkSession(token({ userId: 'no-such-user' }))).toEqual({ ended: 'session_ended' })
+  })
+
+  it('on the login page an ended session is cleared without a redirect loop', async () => {
+    await setUser({ accountStatus: 'SUSPENDED' })
+    try {
+      const res = await visit('/login', token())
+      expect(res.headers.get('location')).toBeNull()
+      expect(res.headers.get('set-cookie')).toMatch(/helpdesk-session=;/)
+    } finally {
+      await setUser({ accountStatus: 'APPROVED' })
+    }
+  })
+
+  it('changing the password signs out other devices but keeps this one', async () => {
+    const before = token()
+    signInAs(userId, 'EMPLOYEE', 'Session User', { sessionVersion: 0 })
+    vi.mocked(createSession).mockClear()
+    expect(await changePassword(undefined, form({ currentPassword: PASSWORD, newPassword: 'a-new-password', confirmPassword: 'a-new-password' }))).toEqual({ success: true })
+
+    expect(await checkSession(before)).toEqual({ ended: 'session_ended' })
+    const reissued = vi.mocked(createSession).mock.lastCall?.[0]
+    expect(reissued?.sessionVersion).toBe(1)
+    expect(await checkSession(token({ sessionVersion: 1 }))).toHaveProperty('session')
+  })
+
+  it('maintenance mode ends the sessions of everyone but admins', async () => {
+    const setting = await prisma.appSettings.findUnique({ where: { id: 'singleton' }, select: { maintenanceMode: true } })
+    try {
+      await prisma.appSettings.update({ where: { id: 'singleton' }, data: { maintenanceMode: true } })
+      expect(await checkSession(token({ sessionVersion: 1 }))).toEqual({ ended: 'maintenance' })
+      expect(await checkSession({ ...token(), userId: adminId })).toHaveProperty('session')
+    } finally {
+      if (setting) await prisma.appSettings.update({ where: { id: 'singleton' }, data: setting })
+    }
+  })
+
+  it('demo logins are only offered when DEMO_MODE=true', () => {
+    vi.stubEnv('DEMO_MODE', '')
+    expect(getDemoAccounts()).toEqual([])
+    vi.stubEnv('DEMO_MODE', 'true')
+    expect(getDemoAccounts().map((a) => a.email)).toContain('admin@company.com')
+    vi.unstubAllEnvs()
   })
 })

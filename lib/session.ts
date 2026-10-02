@@ -1,6 +1,8 @@
 import 'server-only'
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
+import { cache } from 'react'
+import { checkSession } from '@/lib/session-check'
 
 export type Role = 'EMPLOYEE' | 'IT_SUPPORT' | 'ADMIN'
 
@@ -11,12 +13,16 @@ export type SessionPayload = {
   email: string
   /** Invited users signed in with a temporary password and must set their own first */
   mustChangePassword?: boolean
+  /** Must match User.sessionVersion; bumping it signs the user out everywhere */
+  sessionVersion: number
+  /** Signed in with "remember me" */
+  remember?: boolean
   expiresAt: Date
 }
 
 const secretKey = process.env.SESSION_SECRET
-if (!secretKey) {
-  throw new Error('SESSION_SECRET environment variable is not set')
+if (!secretKey || secretKey.length < 32) {
+  throw new Error('SESSION_SECRET must be set to a random value of at least 32 characters')
 }
 const encodedKey = new TextEncoder().encode(secretKey)
 
@@ -47,11 +53,11 @@ export async function decrypt(session: string | undefined): Promise<SessionPaylo
 }
 
 export async function createSession(
-  payload: Omit<SessionPayload, 'expiresAt'>,
+  payload: Omit<SessionPayload, 'expiresAt' | 'remember'>,
   { remember }: { remember: boolean },
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + (remember ? REMEMBER_DURATION : SESSION_DURATION))
-  const session = await encrypt({ ...payload, expiresAt })
+  const session = await encrypt({ ...payload, remember, expiresAt })
   const cookieStore = await cookies()
 
   cookieStore.set(SESSION_COOKIE, session, {
@@ -69,8 +75,14 @@ export async function deleteSession(): Promise<void> {
   cookieStore.delete(SESSION_COOKIE)
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+/**
+ * The signed-in user, checked against the database (see lib/session-check.ts).
+ * Cached for the duration of one request.
+ */
+export const getSession = cache(async (): Promise<SessionPayload | null> => {
   const cookieStore = await cookies()
-  const cookie = cookieStore.get(SESSION_COOKIE)
-  return decrypt(cookie?.value)
-}
+  const payload = await decrypt(cookieStore.get(SESSION_COOKIE)?.value)
+  if (!payload) return null
+  const check = await checkSession(payload)
+  return 'session' in check ? check.session : null
+})

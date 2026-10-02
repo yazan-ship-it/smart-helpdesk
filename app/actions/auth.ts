@@ -51,7 +51,7 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
 
   const mustChangePassword = user.accountStatus === 'INVITED'
   await createSession(
-    { userId: user.id, role: user.role as Role, name: user.name, email: user.email, mustChangePassword },
+    { userId: user.id, role: user.role as Role, name: user.name, email: user.email, mustChangePassword, sessionVersion: user.sessionVersion },
     { remember },
   )
 

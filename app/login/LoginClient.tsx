@@ -21,8 +21,25 @@ import { login, type AuthState } from '@/app/actions/auth'
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'
 import LanguageSwitcher from '@/app/components/LanguageSwitcher'
 import { useTranslation } from '@/lib/i18n'
+import type { DemoAccount } from '@/lib/demo'
+import type { SessionEndReason } from '@/lib/session-check'
 
-export default function LoginClient({ supportEmail }: { supportEmail: string }) {
+const DEMO_STYLE = {
+  EMPLOYEE: { Icon: User, color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400', role: 'roles.employee' },
+  IT_SUPPORT: { Icon: Shield, color: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400', role: 'roles.itSupport' },
+  ADMIN: { Icon: ShieldCheck, color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400', role: 'roles.admin' },
+} as const
+const DEMO_NAME = { alice: 'auth.employeeName', bob: 'auth.itBobName', mike: 'auth.itMikeName', admin: 'auth.adminName' } as const
+
+export default function LoginClient({
+  supportEmail,
+  demoAccounts,
+  endReason,
+}: {
+  supportEmail: string
+  demoAccounts: DemoAccount[]
+  endReason?: SessionEndReason
+}) {
   const [state, action, pending] = useActionState<AuthState, FormData>(login, undefined)
   const { t } = useTranslation()
   const [email, setEmail] = useState('')
@@ -34,7 +51,7 @@ export default function LoginClient({ supportEmail }: { supportEmail: string }) 
   const [rememberMe, setRememberMe] = useState(true)
   const [showForgotHelp, setShowForgotHelp] = useState(false)
   const [isAutoSubmitting, setIsAutoSubmitting] = useState(false)
-  const [activeDemoRole, setActiveDemoRole] = useState<'alice' | 'bob' | 'mike' | 'admin' | null>(null)
+  const [activeDemoRole, setActiveDemoRole] = useState<DemoAccount['key'] | null>(null)
   
   const formRef = useRef<HTMLFormElement>(null)
   const emailInputRef = useRef<HTMLInputElement>(null)
@@ -89,19 +106,14 @@ export default function LoginClient({ supportEmail }: { supportEmail: string }) 
   }
 
   // 1-Click Interactive Demo Login with 200ms auto-submit
-  const handleQuickLogin = (
-    demoEmail: string,
-    demoPass: string,
-    roleName: string,
-    roleKey: 'alice' | 'bob' | 'mike' | 'admin'
-  ) => {
+  const handleQuickLogin = (account: DemoAccount) => {
     setEmailError('')
     setPasswordError('')
-    setActiveDemoRole(roleKey)
-    setEmail(demoEmail)
-    setPassword(demoPass)
+    setActiveDemoRole(account.key)
+    setEmail(account.email)
+    setPassword(account.password)
     setIsAutoSubmitting(true)
-    toast.info(`${roleName}…`)
+    toast.info(`${t(DEMO_NAME[account.key])}…`)
 
     setTimeout(() => {
       formRef.current?.requestSubmit()
@@ -139,7 +151,7 @@ export default function LoginClient({ supportEmail }: { supportEmail: string }) 
             {t('auth.welcomeBack')}
           </h1>
           <p className="text-base text-muted-foreground mt-2 text-center">
-            {t('auth.loginSubtitle')}
+            {t(demoAccounts.length > 0 ? 'auth.loginSubtitle' : 'auth.loginSubtitleNoDemo')}
           </p>
         </div>
 
@@ -168,6 +180,11 @@ export default function LoginClient({ supportEmail }: { supportEmail: string }) 
             <div className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-xl p-3 text-sm flex items-center gap-2 mb-4 animate-in fade-in slide-in-from-top-1 duration-150">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
               <span>{t(`auth.errors.${state.error}`)}</span>
+            </div>
+          ) : endReason ? (
+            <div role="status" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 rounded-xl p-3 text-sm flex items-center gap-2 mb-4">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+              <span>{t(`auth.errors.${endReason}`)}</span>
             </div>
           ) : null}
 
@@ -310,110 +327,38 @@ export default function LoginClient({ supportEmail }: { supportEmail: string }) 
           </button>
         </motion.form>
 
-        {/* 1-Click Instant Demo Access Section */}
-        <div className="w-full mt-10 pt-8 border-t border-border/70">
-          <p className="text-xs font-bold tracking-wider uppercase text-muted-foreground/80 text-center mb-3">
-            {t('auth.instantDemoAccess')}
-          </p>
+        {/* 1-click demo logins, only when DEMO_MODE=true (lib/demo.ts) */}
+        {demoAccounts.length > 0 && (
+          <div className="w-full mt-10 pt-8 border-t border-border/70">
+            <p className="text-xs font-bold tracking-wider uppercase text-muted-foreground/80 text-center mb-3">
+              {t('auth.instantDemoAccess')}
+            </p>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* Employee (Alice) */}
-            <button
-              type="button"
-              onClick={() =>
-                handleQuickLogin('alice@company.com', 'employee123', `${t('roles.employee')} (${t('auth.employeeName')})`, 'alice')
-              }
-              disabled={isWorking}
-              className={`py-3 px-4 rounded-xl border border-border/70 hover:border-primary/50 hover:bg-muted/40 transition-all flex flex-col items-center text-center cursor-pointer ${
-                activeDemoRole === 'alice' && isWorking
-                  ? 'border-primary ring-1 ring-primary/40 bg-primary/10'
-                  : 'bg-background/40'
-              }`}
-            >
-              <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-1.5">
-                {activeDemoRole === 'alice' && isWorking ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <User className="w-4 h-4" />
-                )}
-              </div>
-              <span className="text-sm font-semibold text-foreground">{t('roles.employee')}</span>
-              <span className="text-xs text-muted-foreground mt-0.5">{t('auth.employeeName')}</span>
-            </button>
-
-            {/* IT Support (Bob) */}
-            <button
-              type="button"
-              onClick={() =>
-                handleQuickLogin('bob@company.com', 'support123', `${t('roles.itSupport')} (${t('auth.itBobName')})`, 'bob')
-              }
-              disabled={isWorking}
-              className={`py-3 px-4 rounded-xl border border-border/70 hover:border-primary/50 hover:bg-muted/40 transition-all flex flex-col items-center text-center cursor-pointer ${
-                activeDemoRole === 'bob' && isWorking
-                  ? 'border-primary ring-1 ring-primary/40 bg-primary/10'
-                  : 'bg-background/40'
-              }`}
-            >
-              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-1.5">
-                {activeDemoRole === 'bob' && isWorking ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Shield className="w-4 h-4" />
-                )}
-              </div>
-              <span className="text-sm font-semibold text-foreground">{t('roles.itSupport')}</span>
-              <span className="text-xs text-muted-foreground mt-0.5">{t('auth.itBobName')}</span>
-            </button>
-
-            {/* IT Support (Mike) */}
-            <button
-              type="button"
-              onClick={() =>
-                handleQuickLogin('mike@company.com', 'support123', `${t('roles.itSupport')} (${t('auth.itMikeName')})`, 'mike')
-              }
-              disabled={isWorking}
-              className={`py-3 px-4 rounded-xl border border-border/70 hover:border-primary/50 hover:bg-muted/40 transition-all flex flex-col items-center text-center cursor-pointer ${
-                activeDemoRole === 'mike' && isWorking
-                  ? 'border-primary ring-1 ring-primary/40 bg-primary/10'
-                  : 'bg-background/40'
-              }`}
-            >
-              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-1.5">
-                {activeDemoRole === 'mike' && isWorking ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Shield className="w-4 h-4" />
-                )}
-              </div>
-              <span className="text-sm font-semibold text-foreground">{t('roles.itSupport')}</span>
-              <span className="text-xs text-muted-foreground mt-0.5">{t('auth.itMikeName')}</span>
-            </button>
-
-            {/* Admin */}
-            <button
-              type="button"
-              onClick={() =>
-                handleQuickLogin('admin@company.com', 'admin123', t('auth.adminName'), 'admin')
-              }
-              disabled={isWorking}
-              className={`py-3 px-4 rounded-xl border border-border/70 hover:border-primary/50 hover:bg-muted/40 transition-all flex flex-col items-center text-center cursor-pointer ${
-                activeDemoRole === 'admin' && isWorking
-                  ? 'border-primary ring-1 ring-primary/40 bg-primary/10'
-                  : 'bg-background/40'
-              }`}
-            >
-              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-1.5">
-                {activeDemoRole === 'admin' && isWorking ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <ShieldCheck className="w-4 h-4" />
-                )}
-              </div>
-              <span className="text-sm font-semibold text-foreground">{t('roles.admin')}</span>
-              <span className="text-xs text-muted-foreground mt-0.5">{t('auth.adminName')}</span>
-            </button>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {demoAccounts.map((account) => {
+                const style = DEMO_STYLE[account.role]
+                const active = activeDemoRole === account.key && isWorking
+                return (
+                  <button
+                    key={account.key}
+                    type="button"
+                    onClick={() => handleQuickLogin(account)}
+                    disabled={isWorking}
+                    className={`py-3 px-4 rounded-xl border border-border/70 hover:border-primary/50 hover:bg-muted/40 transition-all flex flex-col items-center text-center cursor-pointer ${
+                      active ? 'border-primary ring-1 ring-primary/40 bg-primary/10' : 'bg-background/40'
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-lg ${style.color} flex items-center justify-center mb-1.5`}>
+                      {active ? <Loader2 className="w-4 h-4 animate-spin" /> : <style.Icon className="w-4 h-4" />}
+                    </div>
+                    <span className="text-sm font-semibold text-foreground">{t(style.role)}</span>
+                    <span className="text-xs text-muted-foreground mt-0.5">{t(DEMO_NAME[account.key])}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Request Access Link */}
         <p className="text-center text-sm text-muted-foreground mt-8">

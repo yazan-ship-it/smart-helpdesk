@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { decrypt, SESSION_COOKIE } from '@/lib/session'
+import { checkSession } from '@/lib/session-check'
 
 const protectedRoutes = ['/tickets', '/account']
 const adminRoutes = ['/admin']
@@ -12,8 +13,17 @@ export default async function proxy(req: NextRequest) {
   const isAdminRoute = adminRoutes.some((route) => path.startsWith(route))
   const isPublicRoute = publicRoutes.some((route) => path === route || path.startsWith(route + '/'))
 
-  const session = await decrypt(req.cookies.get(SESSION_COOKIE)?.value)
   const redirectTo = (target: string) => NextResponse.redirect(new URL(target, req.nextUrl))
+
+  const token = await decrypt(req.cookies.get(SESSION_COOKIE)?.value)
+  const check = token ? await checkSession(token) : null
+  if (check && 'ended' in check) {
+    // The cookie is validly signed but no longer accepted: drop it and say why
+    const res = isPublicRoute ? NextResponse.next() : redirectTo(`/login?reason=${check.ended}`)
+    res.cookies.delete(SESSION_COOKIE)
+    return res
+  }
+  const session = check?.session ?? null
 
   // Signed in with a temporary password: nothing else until it is replaced
   if (session?.mustChangePassword && path !== PASSWORD_PAGE && !isPublicRoute) {

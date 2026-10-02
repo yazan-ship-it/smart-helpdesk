@@ -24,21 +24,24 @@ export async function changePassword(_prev: ChangePasswordState, formData: FormD
   if (next !== confirm) return { error: 'mismatch' }
   if (next === current) return { error: 'same_as_current' }
 
-  await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
       password: await bcrypt.hash(next, 12),
+      // Signs out every other device that still has the old session
+      sessionVersion: { increment: 1 },
       // An invited account becomes a normal one once its owner picks a password
       ...(user.accountStatus === 'INVITED' ? { accountStatus: 'APPROVED' } : {}),
     },
   })
 
+  // Keep this device signed in with a session for the new version
+  await createSession(
+    { userId: user.id, role: session.role, name: user.name, email: user.email, sessionVersion: updated.sessionVersion },
+    { remember: session.remember ?? false },
+  )
   if (!session.mustChangePassword) return { success: true }
 
-  // First sign-in: re-issue the session without the flag and continue to the app
-  await createSession(
-    { userId: user.id, role: session.role, name: user.name, email: user.email },
-    { remember: false },
-  )
+  // First sign-in: continue to the app
   redirect(session.role === 'ADMIN' ? '/admin/users' : '/tickets')
 }

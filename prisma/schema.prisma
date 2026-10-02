@@ -25,6 +25,8 @@ model User {
   skills      String   @default("[]")
   /// Whether the IT agent is currently available for ticket assignment
   isAvailable   Boolean  @default(true)
+  /// Copied into the session cookie; incrementing it ends every existing session
+  sessionVersion Int     @default(0)
   lastLoginAt   DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

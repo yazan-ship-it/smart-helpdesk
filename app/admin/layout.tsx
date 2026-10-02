@@ -5,6 +5,7 @@ import { LifeBuoy, Shield, Zap, Database } from 'lucide-react'
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'
 import UserDropdown from '@/app/components/UserDropdown'
 import SidebarNav from '@/app/components/SidebarNav'
+import ResponsiveSidebar from '@/app/components/ResponsiveSidebar'
 import { getRoleLabel } from '@/lib/roles'
 import { prisma } from '@/lib/db'
 import { getBrandName } from '@/lib/brand'
@@ -57,7 +58,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       {/* Sidebar */}
-      <aside className="flex flex-col w-60 border-r rtl:border-r-0 rtl:border-l border-[var(--border)] bg-[var(--bg-elevated)] h-full shrink-0">
+      <ResponsiveSidebar title={brandName} className="flex flex-col w-60 border-r rtl:border-r-0 rtl:border-l border-[var(--border)] bg-[var(--bg-elevated)] h-full shrink-0">
         {/* Brand */}
         <div className="p-4 flex items-center gap-3 border-b border-[var(--border)] shrink-0 overflow-hidden whitespace-nowrap">
           <LifeBuoy className="w-7 h-7 text-indigo-500 shrink-0" />
@@ -107,12 +108,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div className="p-3 border-t border-[var(--border)]">
           <UserDropdown user={{ name: session.name, role: session.role }} placement="top" />
         </div>
-      </aside>
+      </ResponsiveSidebar>
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden pt-14 md:pt-0">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] shrink-0">
+        <header className="hidden md:flex items-center justify-between px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] shrink-0">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-indigo-500" />
             <span className="text-sm font-semibold text-foreground">
@@ -127,7 +128,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6" style={{ background: 'var(--bg-base)' }}>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6" style={{ background: 'var(--bg-base)' }}>
           {children}
         </main>
       </div>

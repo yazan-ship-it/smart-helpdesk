@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import { getBrandName } from '@/lib/brand'
 import { getAppSettings } from '@/lib/settings'
 import UserDropdown from '@/app/components/UserDropdown'
+import ResponsiveSidebar from '@/app/components/ResponsiveSidebar'
 import AvailabilityToggle from '@/app/components/AvailabilityToggle'
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'
 
@@ -62,15 +63,16 @@ export default async function TicketsLayout({
     return (
       <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>
         {/* Top Header */}
-        <header className="flex items-center justify-between px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] shrink-0 gap-4">
-          <div className="flex items-center gap-8 min-w-0 shrink-0">
-            <div className="flex items-center gap-3 shrink-0 whitespace-nowrap">
+        <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-elevated)] shrink-0 gap-3">
+          {/* The brand shrinks (with an ellipsis) so the actions on the other side always fit */}
+          <div className="flex items-center gap-8 min-w-0 flex-1">
+            <div className="flex items-center gap-3 min-w-0">
               <LifeBuoy className="w-8 h-8 text-[var(--brand)] shrink-0" />
-              <div className="shrink-0 whitespace-nowrap">
-                <p className="text-xl md:text-2xl font-extrabold tracking-tight whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+              <div className="min-w-0">
+                <p className="text-lg md:text-2xl font-extrabold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>
                   {brandName}
                 </p>
-                <p className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-[10px] uppercase tracking-wider font-semibold truncate" style={{ color: 'var(--text-muted)' }}>
                   {locale === 'ar' ? 'بوابة الموظف' : 'Employee Portal'}
                 </p>
               </div>
@@ -85,9 +87,14 @@ export default async function TicketsLayout({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            <Link href="/tickets/new" className="btn btn-primary text-sm h-9 px-4 hidden sm:flex items-center shadow-sm">
-              <Plus className="w-4 h-4 mr-1.5 rtl:mr-0 rtl:ml-1.5" />
-              {locale === 'ar' ? 'إنشاء تذكرة' : 'Create Ticket'}
+            {/* Icon-only on phones (the .btn class sets display, so Tailwind's "hidden" can't hide it) */}
+            <Link
+              href="/tickets/new"
+              className="btn btn-primary text-sm h-9 px-2.5 sm:px-4 items-center shadow-sm"
+              aria-label={locale === 'ar' ? 'إنشاء تذكرة' : 'Create Ticket'}
+            >
+              <Plus className="w-4 h-4 sm:me-1.5" />
+              <span className="hidden sm:inline">{locale === 'ar' ? 'إنشاء تذكرة' : 'Create Ticket'}</span>
             </Link>
 
             <ThemeSwitcher />
@@ -108,7 +115,7 @@ export default async function TicketsLayout({
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>
       {/* Sidebar */}
-      <aside className="sidebar flex flex-col w-64 border-r rtl:border-r-0 rtl:border-l border-[var(--border)] bg-[var(--bg-elevated)] h-full">
+      <ResponsiveSidebar title={brandName} className="flex flex-col w-64 border-r rtl:border-r-0 rtl:border-l border-[var(--border)] bg-[var(--bg-elevated)] h-full shrink-0">
         {/* Brand */}
         <div className="sidebar-brand p-4 flex items-center justify-between gap-2 border-b border-[var(--border)] overflow-hidden shrink-0">
           <div className="flex items-center gap-3 min-w-0 shrink-0 whitespace-nowrap">
@@ -241,11 +248,11 @@ export default async function TicketsLayout({
           )}
           <UserDropdown user={{ name: session?.name || 'User', role: session?.role ?? '' }} placement="top" />
         </div>
-      </aside>
+      </ResponsiveSidebar>
 
       {/* Main */}
       <main
-        className="flex-1 overflow-y-auto"
+        className="flex-1 min-w-0 overflow-y-auto pt-14 md:pt-0"
         style={{ background: 'var(--bg-base)' }}
       >
         {/* Critical banner at top of main area */}

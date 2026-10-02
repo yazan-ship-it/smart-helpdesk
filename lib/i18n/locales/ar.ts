@@ -447,6 +447,8 @@ export const ar: TranslationDictionary = {
   },
   // Misc UI labels
   ui: {
+    openMenu: 'فتح القائمة',
+    closeMenu: 'إغلاق القائمة',
     showingUsers: 'عرض {shown} من {total} مستخدم',
     approve: 'موافقة',
     reject: 'رفض',

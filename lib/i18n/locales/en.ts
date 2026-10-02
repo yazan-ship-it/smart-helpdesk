@@ -445,6 +445,8 @@ export const en = {
   },
   // Misc UI labels
   ui: {
+    openMenu: 'Open menu',
+    closeMenu: 'Close menu',
     showingUsers: 'Showing {shown} of {total} users',
     approve: 'Approve',
     reject: 'Reject',

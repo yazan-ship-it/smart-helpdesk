@@ -62,7 +62,7 @@ export default function TicketDrawer({
   onClose: () => void
   currentUserId: string
 }) {
-  const { locale, isRTL } = useTranslation()
+  const { t, locale, isRTL } = useTranslation()
   const [ticket, setTicket] = useState<TicketDetails | null>(null)
   // Id of the ticket whose fetch has finished; a spinner shows until it matches ticketId
   const [loadedId, setLoadedId] = useState<string | null>(null)
@@ -210,7 +210,7 @@ export default function TicketDrawer({
                 <Link
                   href={`/tickets/${ticket.id}`}
                   className="btn btn-secondary btn-sm"
-                  title="Expand to Full Page"
+                  title={t('ui.expandFullPage')}
                 >
                   <ExternalLink className="w-4 h-4 mr-1.5 rtl:mr-0 rtl:ml-1.5" />
                   <span>{locale === 'ar' ? 'عرض الصفحة كاملة' : 'Open Full'}</span>
@@ -312,7 +312,7 @@ export default function TicketDrawer({
                             <div className="flex items-center justify-between mb-1.5">
                               <span className="font-medium text-sm text-foreground">
                                 {comment.author?.name}
-                                {isIT && <span className="ml-2 text-[10px] uppercase font-bold text-brand bg-brand/10 px-1.5 py-0.5 rounded">IT Support</span>}
+                                {isIT && <span className="ml-2 text-[10px] uppercase font-bold text-brand bg-brand/10 px-1.5 py-0.5 rounded">{t('ui.itSupportBadge')}</span>}
                               </span>
                               <span className="text-[10px] text-muted-foreground">{formatRelativeTime(comment.createdAt, locale)}</span>
                             </div>

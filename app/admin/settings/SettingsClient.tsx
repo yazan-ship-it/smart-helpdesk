@@ -50,7 +50,7 @@ const DAYS_TRANSLATIONS: Record<string, string> = {
 const DAYS_OF_WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 export default function SettingsClient({ initialSettings, agents }: Props) {
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const [isPending, startTransition] = useTransition()
   const [activeTab, setActiveTab] = useState('general')
 
@@ -141,7 +141,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
   const handleAddCategory = () => {
     if (!newCategory.trim()) return
     if (formData.categoriesList.includes(newCategory.trim())) {
-      toast.error('Category already exists')
+      toast.error(t('toasts.categoryExists'))
       return
     }
     setFormData(prev => ({ ...prev, categoriesList: [...prev.categoriesList, newCategory.trim()] }))
@@ -154,7 +154,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
 
   const handleAddResponse = () => {
     if (!newResponse.title.trim() || !newResponse.content.trim()) {
-      toast.error('Title and content are required')
+      toast.error(t('toasts.cannedRequired'))
       return
     }
     setFormData(prev => ({
@@ -171,24 +171,24 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
 
   const handleSave = () => {
     if (!formData.appName.trim()) {
-      toast.error('App Name is required')
+      toast.error(t('toasts.appNameRequired'))
       return
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!formData.supportEmail || !emailRegex.test(formData.supportEmail)) {
-      toast.error('Valid Support Email is required')
+      toast.error(t('toasts.supportEmailRequired'))
       return
     }
     if (formData.slaCriticalHours <= 0 || formData.slaHighHours <= 0 || formData.slaMediumHours <= 0 || formData.slaLowHours <= 0) {
-      toast.error('SLA hours must be positive numbers')
+      toast.error(t('toasts.slaPositive'))
       return
     }
     if (formData.workDays.length === 0) {
-      toast.error('At least one working day must be selected')
+      toast.error(t('toasts.workDayRequired'))
       return
     }
     if (formData.categoriesList.length === 0) {
-      toast.error('At least one category must be defined')
+      toast.error(t('toasts.categoryRequired'))
       return
     }
 
@@ -217,7 +217,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
           }
         }
 
-        toast.success('Settings updated successfully')
+        toast.success(t('toasts.settingsUpdated'))
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to update settings')
       }

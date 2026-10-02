@@ -203,7 +203,7 @@ function InviteUserModal({ onClose }: { onClose: () => void }) {
 
 // ── Edit User Modal ───────────────────────────────────────────────────────────
 function EditUserModal({ user, categories, onClose }: { user: UserRow; categories: string[]; onClose: () => void }) {
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const router = useRouter()
   const [role, setRole] = useState(user.role as Role)
   const [skills, setSkills] = useState<string[]>(parseSkills(user.skills))
@@ -219,7 +219,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
       if (res.error) {
         toast.error(res.error)
       } else {
-        toast.success(`User updated successfully`)
+        toast.success(t('toasts.userUpdated'))
         router.refresh()
         onClose()
       }
@@ -235,11 +235,11 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
         <h2 className="text-xl font-bold mb-4">{locale === 'ar' ? `تعديل المستخدم: ${user.name}` : `Edit User: ${user.name}`}</h2>
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Role</label>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">{t('invite.role')}</label>
             <select value={role} onChange={e => setRole(e.target.value as Role)} className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm">
-              <option value="EMPLOYEE">Employee</option>
-              <option value="IT_SUPPORT">IT Support</option>
-              <option value="ADMIN">Admin</option>
+              {(['EMPLOYEE', 'IT_SUPPORT', 'ADMIN'] as const).map((r) => (
+                <option key={r} value={r}>{getRoleLabel(r, locale)}</option>
+              ))}
             </select>
           </div>
           
@@ -258,7 +258,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
           )}
           
           <div className="flex justify-end gap-2 mt-6">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted text-muted-foreground">Cancel</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted text-muted-foreground">{t('common.cancel')}</button>
             <button type="button" onClick={handleSave} disabled={isPending} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50">
               {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               {locale === 'ar' ? 'حفظ التغييرات' : 'Save Changes'}
@@ -275,7 +275,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
 
 // ── User Row ─────────────────────────────────────────────────────────────────
 function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow; categories: string[]; selected: boolean; onToggle: () => void }) {
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const router = useRouter()
   const [isPendingStatus, startStatusTransition] = useTransition()
   const [showEdit, setShowEdit] = useState(false)
@@ -287,7 +287,7 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
       const result = await updateUserStatus(user.id, status)
       if (result.error) toast.error(result.error)
       else {
-        toast.success(`User status updated to ${status}`)
+        toast.success(t('toasts.userStatusUpdated'))
         router.refresh()
       }
     })
@@ -343,7 +343,7 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
                   {getCategoryLabel(s, locale)}
                 </span>
               ))
-            ) : <span className="text-[10px] text-muted-foreground">None</span>}
+            ) : <span className="text-[10px] text-muted-foreground">{t('ui.none')}</span>}
             {skills.length > 2 && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">+{skills.length - 2}</span>}
           </div>
         ) : (
@@ -370,28 +370,28 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
         <div className="flex items-center gap-2">
           {user.accountStatus === 'PENDING' && (
             <>
-              <button onClick={() => handleStatusChange('APPROVED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/10 transition-colors" title="Approve">
+              <button onClick={() => handleStatusChange('APPROVED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/10 transition-colors" title={t('ui.approve')}>
                 {isPendingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
               </button>
-              <button onClick={() => handleStatusChange('REJECTED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-red-600 hover:bg-red-500/10 transition-colors" title="Reject">
+              <button onClick={() => handleStatusChange('REJECTED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-red-600 hover:bg-red-500/10 transition-colors" title={t('ui.reject')}>
                 {isPendingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
               </button>
             </>
           )}
 
           {user.accountStatus === 'APPROVED' && (
-            <button onClick={() => handleStatusChange('SUSPENDED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-500/10 transition-colors" title="Suspend">
+            <button onClick={() => handleStatusChange('SUSPENDED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-500/10 transition-colors" title={t('ui.suspend')}>
               {isPendingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
             </button>
           )}
 
           {user.accountStatus === 'SUSPENDED' && (
-            <button onClick={() => handleStatusChange('APPROVED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/10 transition-colors" title="Reactivate">
+            <button onClick={() => handleStatusChange('APPROVED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/10 transition-colors" title={t('ui.reactivate')}>
               {isPendingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             </button>
           )}
           
-          <button onClick={() => setShowEdit(true)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title="Edit Role & Skills">
+          <button onClick={() => setShowEdit(true)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" title={t('ui.editRoleSkills')}>
             <Edit2 className="w-4 h-4" />
           </button>
         </div>
@@ -404,7 +404,7 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
 // ── Main Client Component ─────────────────────────────────────────────────────
 export default function AdminUsersClient({ users, counts, categories, initialStatus = '' }: Props) {
   const router = useRouter()
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus)
   const [roleFilter, setRoleFilter] = useState<string>('')
@@ -457,7 +457,7 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
       const res = await bulkUpdateUserStatus(Array.from(selectedIds), action)
       if (res.error) toast.error(res.error)
       else {
-        toast.success(`Bulk ${action.toLowerCase()} successful.`)
+        toast.success(t('toasts.bulkUpdated', { count: selectedIds.size }))
         setSelectedIds(new Set())
         router.refresh()
       }
@@ -525,9 +525,9 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
           <div className="relative">
             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="appearance-none bg-card border border-border rounded-xl pl-3.5 pr-8 py-2 text-sm text-foreground outline-none transition-all focus:border-indigo-500/70 cursor-pointer">
               <option value="">{locale === 'ar' ? 'كافة الأدوار' : 'All Roles'}</option>
-              <option value="EMPLOYEE">Employee</option>
-              <option value="IT_SUPPORT">IT Support</option>
-              <option value="ADMIN">Admin</option>
+              {(['EMPLOYEE', 'IT_SUPPORT', 'ADMIN'] as const).map((r) => (
+                <option key={r} value={r}>{getRoleLabel(r, locale)}</option>
+              ))}
             </select>
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           </div>
@@ -561,7 +561,7 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
                     onChange={toggleSelectAll} 
                     disabled={pendingUsers.length === 0}
                     className="rounded border-border text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
-                    title="Select all pending users"
+                    title={t('ui.selectAllPending')}
                   />
                 </th>
                 <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{locale === 'ar' ? 'المستخدم' : 'User'}</th>
@@ -590,14 +590,14 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
           {filtered.length === 0 && (
             <div className="text-center py-16 text-muted-foreground">
               <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">No users match the current filters.</p>
+              <p className="text-sm font-medium">{t('ui.noUsersMatch')}</p>
               {hasFilters && (
                 <button
                   type="button"
                   onClick={() => { setSearch(''); setStatusFilter(''); setRoleFilter('') }}
                   className="mt-2 text-xs text-indigo-500 hover:text-indigo-400 underline cursor-pointer"
                 >
-                  Clear all filters
+                  {t('ui.clearAllFilters')}
                 </button>
               )}
             </div>
@@ -606,7 +606,7 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
 
         {/* Table footer count */}
         <div className="px-4 py-3 border-t border-border bg-muted/20 text-[11px] text-muted-foreground flex justify-between">
-          <span>Showing {filtered.length} of {users.length} user{users.length !== 1 ? 's' : ''}</span>
+          <span>{t('ui.showingUsers', { shown: filtered.length, total: users.length })}</span>
         </div>
       </div>
 

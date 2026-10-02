@@ -201,10 +201,10 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
   
   useEffect(() => {
     if (searchParams?.get('created') === 'true') {
-      toast.success('Ticket created successfully')
+      toast.success(t('toasts.ticketCreated'))
       router.replace(pathname || '/tickets')
     }
-  }, [searchParams, pathname, router])
+  }, [searchParams, pathname, router, t])
 
   // ⚡ Critical ticket in-app notification for IT Support agents
   useEffect(() => {
@@ -218,7 +218,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
     )
     if (myCritical.length > 0) {
       toast.error(
-        `⚡ You have ${myCritical.length} critical incident${myCritical.length > 1 ? 's' : ''} assigned — immediate response required!`,
+        t('toasts.criticalAssigned', { count: myCritical.length }),
         { duration: 6000, id: 'critical-alert' }
       )
     }
@@ -1168,7 +1168,7 @@ function StatCard({
 
 export default function TicketListClient(props: Props) {
  return (
- <Suspense fallback={<div>Loading...</div>}>
+ <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">…</div>}>
  <TicketListClientContent {...props} />
  </Suspense>
  )

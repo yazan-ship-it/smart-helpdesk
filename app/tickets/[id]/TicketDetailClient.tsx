@@ -33,6 +33,8 @@ import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } fr
 import AiTranslateButton from '@/app/components/AiTranslateButton'
 import AiTicketSummary from '@/app/components/AiTicketSummary'
 import { describeHistory } from '@/lib/history'
+import { getRoleLabel } from '@/lib/roles'
+import { parseSkills } from '@/lib/skills'
 
 type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -175,14 +177,12 @@ export default function TicketDetailClient({
           toast.error(result.error)
         } else {
           toast.success(
-            ticket.assignedTo
-              ? `Ticket taken over from ${ticket.assignedTo.name} and assigned to you`
-              : 'Ticket claimed and assigned to you'
+            ticket.assignedTo ? t('toasts.takenOverFrom', { name: ticket.assignedTo.name }) : t('toasts.claimed')
           )
           router.refresh()
         }
       } catch {
-        toast.error('Failed to take over ticket')
+        toast.error(t('toasts.takeOverFailed'))
       }
     })
   }
@@ -209,11 +209,11 @@ export default function TicketDetailClient({
  } else {
  setCommentText('')
  setIsInternalNote(false)
- toast.success(isInternalNote ? 'Internal note added' : 'Comment posted successfully')
+ toast.success(isInternalNote ? t('toasts.internalNoteAdded') : t('toasts.commentPosted'))
  router.refresh()
  }
  } catch {
- toast.error('Failed to post comment')
+ toast.error(t('toasts.commentFailed'))
  }
  })
  }
@@ -242,11 +242,11 @@ export default function TicketDetailClient({
  if (result?.error) {
  toast.error(result.error)
  } else {
- toast.success(`Status updated to ${newStatus.replace('_', ' ')}`)
+ toast.success(t('toasts.statusUpdatedTo', { status: getStatusLabel(newStatus, locale) }))
  router.refresh()
  }
  } catch {
- toast.error('Failed to update status')
+ toast.error(t('toasts.statusFailed'))
  }
  })
  }
@@ -262,11 +262,11 @@ export default function TicketDetailClient({
  toast.error(result.error)
  } else {
  const agent = itAgents.find((a) => a.id === selectedAssignee)
- toast.success(`Ticket assigned to ${agent?.name ?? 'agent'}`)
+ toast.success(t('toasts.assignedTo', { name: agent?.name ?? '' }))
  router.refresh()
  }
  } catch {
- toast.error('Failed to assign ticket')
+ toast.error(t('toasts.assignFailed'))
  }
  })
  }
@@ -276,7 +276,7 @@ export default function TicketDetailClient({
  if (typeof window !== 'undefined') {
  navigator.clipboard.writeText(window.location.href)
  setCopied(true)
- toast.success('Ticket URL copied to clipboard')
+ toast.success(t('toasts.linkCopied'))
  setTimeout(() => setCopied(false), 2000)
  }
  }
@@ -333,7 +333,7 @@ export default function TicketDetailClient({
  <button
  onClick={handleCopyLink}
  className="btn btn-secondary btn-sm"
- title="Copy ticket URL"
+ title={t('ui.copyTicketUrl')}
  >
  {copied ? (
  <>
@@ -369,7 +369,7 @@ export default function TicketDetailClient({
            startTransitionAction(async () => {
              const res = await confirmTicketResolution(ticket.id)
              if (res.error) toast.error(res.error)
-             else { toast.success('Ticket closed successfully'); router.refresh() }
+             else { toast.success(t('toasts.ticketClosed')); router.refresh() }
            })
          }}
          disabled={isPendingAction}
@@ -404,7 +404,7 @@ export default function TicketDetailClient({
          disabled={isPendingAction || reopenReason.trim().length < 5}
          className="btn bg-amber-600 hover:bg-amber-700 text-white text-sm border-0"
        >
-         Submit & Reopen
+         {t('ui.submitReopen')}
        </button>
      </div>
    </div>
@@ -442,13 +442,13 @@ export default function TicketDetailClient({
              startTransitionAction(async () => {
                const res = await submitCsatRating(ticket.id, csatRatingValue, csatFeedbackText)
                if (res.error) toast.error(res.error)
-               else { toast.success('Thank you for your feedback!'); router.refresh() }
+               else { toast.success(t('toasts.thanksFeedback')); router.refresh() }
              })
            }}
            disabled={isPendingAction}
            className="btn btn-primary w-full shadow-sm"
          >
-           Submit Feedback
+           {t('ui.submitFeedback')}
          </button>
        </div>
      )}
@@ -901,7 +901,7 @@ export default function TicketDetailClient({
  </h3>
  </div>
  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-800 dark:text-indigo-300 font-semibold">
- Admin
+ {getRoleLabel(currentUserRole, locale)}
  </span>
  </div>
 
@@ -1032,8 +1032,7 @@ export default function TicketDetailClient({
   {/* Agent Cards */}
   <div className="space-y-1.5">
   {itAgents.map((agent) => {
-  let agentSkills: string[] = []
-  try { agentSkills = JSON.parse(agent.skills || '[]') } catch {}
+  const agentSkills = parseSkills(agent.skills)
   const isSelected = selectedAssignee === agent.id
   const isCurrent = ticket.assignedToId === agent.id
   return (
@@ -1062,8 +1061,8 @@ export default function TicketDetailClient({
   {agentSkills.length > 0 && (
   <div className="flex flex-wrap gap-1">
   {agentSkills.slice(0, 3).map((skill) => (
-  <span key={skill} className={`text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground border border-border ${skill.toLowerCase() === ticket.category.toLowerCase() ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/20 font-semibold' : ''}`}>
-  {skill}
+  <span key={skill} className={`text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground border border-border ${skill === ticket.category ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/20 font-semibold' : ''}`}>
+  {getCategoryLabel(skill, locale)}
   </span>
   ))}
   </div>

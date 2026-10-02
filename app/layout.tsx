@@ -58,6 +58,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             {children}
             <Toaster
               position="bottom-right"
+              dir={locale === "ar" ? "rtl" : "ltr"}
+              containerAriaLabel={locale === "ar" ? "الإشعارات" : "Notifications"}
               richColors
               toastOptions={{
                 style: {

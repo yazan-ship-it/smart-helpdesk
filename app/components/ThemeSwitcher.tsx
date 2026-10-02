@@ -23,7 +23,7 @@ const MODE_OPTIONS = [
 
 export default function ThemeSwitcher({ placement = 'top' }: { placement?: 'top' | 'bottom' }) {
   const { theme, setTheme } = useTheme()
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const [accent, setAccent] = useState<AccentColor>(() =>
     (typeof window !== 'undefined' && (localStorage.getItem('helpdesk-accent') as AccentColor | null)) || 'blue'
   )
@@ -56,7 +56,7 @@ export default function ThemeSwitcher({ placement = 'top' }: { placement?: 'top'
         onClick={() => setOpen((o) => !o)}
         className="btn btn-ghost btn-icon"
         title={locale === 'ar' ? 'المظهر وتخصيص الألوان' : 'Theme & Appearance'}
-        aria-label="Open theme switcher"
+        aria-label={t('ui.openThemeSwitcher')}
       >
         <Palette
           className="w-4 h-4"

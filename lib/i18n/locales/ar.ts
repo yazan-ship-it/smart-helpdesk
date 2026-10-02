@@ -404,6 +404,23 @@ export const ar: TranslationDictionary = {
     copied: 'تم النسخ',
     done: 'تم',
   },
+  // Ticket audit trail ({placeholders} are filled in when shown)
+  history: {
+    created: 'تم إنشاء التذكرة #{number}',
+    auto_assigned: 'تم الإسناد تلقائياً إلى {agent} (الفئة: {category})',
+    queued_unassigned: 'لا يوجد أخصائي متاح في فئة {category}؛ التذكرة بانتظار الإسناد',
+    status_changed: 'تغيرت الحالة من {from} إلى {to}',
+    status_changed_claimed: 'تم استلام التذكرة؛ تغيرت الحالة من {from} إلى {to}',
+    assigned: 'تم الإسناد إلى {agent} بواسطة {actor}',
+    reassigned: 'أعيد الإسناد من {from} إلى {agent} بواسطة {actor}',
+    reassigned_by_admin: 'أعيد الإسناد إلى {agent} بواسطة المدير',
+    taken_over: 'استلم {actor} التذكرة من {from}',
+    priority_changed: 'تغيرت الأولوية إلى {to}',
+    comment_added: 'أضاف {actor} تعليقاً',
+    resolution_confirmed: 'أكد مقدم الطلب الحل؛ تم إغلاق التذكرة',
+    reopened: 'أعاد مقدم الطلب فتح التذكرة. السبب: {reason}',
+    csat_submitted: 'تقييم الرضا: {rating}/5',
+  },
   // AI features
   ai: {
     translate: 'ترجمة',

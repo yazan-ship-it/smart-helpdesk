@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "db:migrate": "prisma migrate dev --name init",
     "db:seed": "node scripts/seed.js",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:backfill-history": "node scripts/run-ts.js scripts/backfill-history-events.ts"
   },
   "prisma": {
     "seed": "node scripts/seed.js"

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/db'
 import { getSession } from '@/lib/session'
 import { resolveAutoAssignment, type DispatchResult } from '@/lib/services/assignment'
 import { calculateBusinessHoursDeadline, statusChangeFields } from '@/lib/sla'
+import { historyData } from '@/lib/history'
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 export type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
@@ -115,7 +116,7 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
     data: {
       ticketId: ticket.id,
       userId: session.userId,
-      action: `Ticket #${nextNumber} created`,
+      ...historyData({ type: 'created', number: nextNumber }, session.name),
     },
   })
 
@@ -125,7 +126,7 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
       data: {
         ticketId: ticket.id,
         userId: session.userId,
-        action: `System auto-assigned ticket to ${dispatch.agentName} based on category (${category})`,
+        ...historyData({ type: 'auto_assigned', agent: dispatch.agentName, category }, session.name),
       },
     })
   } else {
@@ -133,7 +134,7 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
       data: {
         ticketId: ticket.id,
         userId: session.userId,
-        action: `No available specialist found for ${category} — ticket queued in Unassigned`,
+        ...historyData({ type: 'queued_unassigned', category }, session.name),
       },
     })
   }
@@ -173,11 +174,8 @@ export async function updateTicketStatus(ticketId: string, newStatus: Status): P
 
   // If unassigned, auto-claim the ticket when changing status
   const updateData: { status: Status; assignedToId?: string } = { status: newStatus }
-  let claimLog = ''
-  if (!ticket.assignedToId) {
-    updateData.assignedToId = session.userId
-    claimLog = ' claimed and'
-  }
+  const claimed = !ticket.assignedToId
+  if (claimed) updateData.assignedToId = session.userId
 
   await prisma.ticket.update({
     where: { id: ticketId },
@@ -188,7 +186,7 @@ export async function updateTicketStatus(ticketId: string, newStatus: Status): P
     data: {
       ticketId,
       userId: session.userId,
-      action: `Ticket${claimLog} status changed from ${currentStatus} to ${newStatus}`,
+      ...historyData({ type: 'status_changed', from: currentStatus, to: newStatus, ...(claimed ? { claimed } : {}) }, session.name),
     },
   })
 
@@ -218,7 +216,7 @@ export async function reassignTicket(ticketId: string, newAssigneeId: string): P
     data: {
       ticketId,
       userId: session.userId,
-      action: `Ticket reassigned to ${newAssignee.name} by Admin`,
+      ...historyData({ type: 'reassigned_by_admin', agent: newAssignee.name }, session.name),
     },
   })
 
@@ -258,7 +256,7 @@ export async function takeOverTicket(ticketId: string): Promise<{ error?: string
     data: {
       ticketId,
       userId: session.userId,
-      action: `Ticket taken over by ${session.name} (reassigned from ${previousAgentName})`,
+      ...historyData({ type: 'taken_over', from: previousAgentName }, session.name),
     },
   })
 
@@ -304,15 +302,11 @@ export async function assignTicket(
     },
   })
 
-  const actionMessage = previousAgent
-    ? `Reassigned from ${previousAgent.name} to ${assignee.name} by ${session.name}`
-    : `Ticket assigned to ${assignee.name} by ${session.name} (status: OPEN → ASSIGNED)`
-
   await prisma.ticketHistory.create({
     data: {
       ticketId,
       userId: session.userId,
-      action: actionMessage,
+      ...historyData({ type: 'assigned', agent: assignee.name, ...(previousAgent ? { from: previousAgent.name } : {}) }, session.name),
     },
   })
 
@@ -336,7 +330,7 @@ export async function updateTicketPriority(ticketId: string, priority: Priority)
     data: {
       ticketId,
       userId: session.userId,
-      action: `Priority updated to ${priority}`,
+      ...historyData({ type: 'priority_changed', to: priority }, session.name),
     },
   })
 
@@ -379,7 +373,7 @@ export async function addComment(ticketId: string, content: string, isInternal: 
     data: {
       ticketId,
       userId: session.userId,
-      action: `Comment added by ${session.name}`,
+      ...historyData({ type: 'comment_added' }, session.name),
     },
   })
 
@@ -485,7 +479,7 @@ export async function confirmTicketResolution(ticketId: string): Promise<{ error
     data: {
       ticketId,
       userId: session.userId,
-      action: 'Resolution confirmed by requester. Ticket closed.',
+      ...historyData({ type: 'resolution_confirmed' }, session.name),
     }
   })
 
@@ -525,7 +519,7 @@ export async function reopenTicket(ticketId: string, reason: string): Promise<{ 
     data: {
       ticketId,
       userId: session.userId,
-      action: `Ticket reopened by requester. Reason: ${reason}`,
+      ...historyData({ type: 'reopened', reason: reason.trim() }, session.name),
     }
   })
 
@@ -561,7 +555,7 @@ export async function submitCsatRating(ticketId: string, rating: number, feedbac
     data: {
       ticketId,
       userId: session.userId,
-      action: `CSAT Rating submitted: ${rating} Stars`,
+      ...historyData({ type: 'csat_submitted', rating }, session.name),
     }
   })
 

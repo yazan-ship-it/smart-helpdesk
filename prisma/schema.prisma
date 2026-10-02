@@ -86,6 +86,10 @@ model Comment {
 model TicketHistory {
   id             String   @id @default(cuid())
   action         String
+  /// Event type (see lib/history.ts); null for rows written before events existed
+  event          String?
+  /// JSON data for the event, e.g. {"from":"OPEN","to":"ASSIGNED"}
+  meta           String?
   overrideReason String?
   createdAt      DateTime @default(now())
 

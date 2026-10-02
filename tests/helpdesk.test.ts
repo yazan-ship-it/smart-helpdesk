@@ -418,7 +418,7 @@ describe('Test 4: Status Lifecycle State Machine', () => {
   })
 
   it('records each successful transition in the audit trail, and nothing for rejected ones', async () => {
-    const history = await prisma.ticketHistory.findMany({ where: { ticketId }, select: { action: true, userId: true } })
+    const history = await prisma.ticketHistory.findMany({ where: { ticketId }, select: { action: true, userId: true, event: true } })
     expect(history.map((h) => h.action).sort()).toEqual(
       [
         'Ticket claimed and status changed from OPEN to ASSIGNED',
@@ -428,6 +428,8 @@ describe('Test 4: Status Lifecycle State Machine', () => {
       ].sort()
     )
     expect(history.every((h) => h.userId === itSupportId)).toBe(true)
+    // Stored as structured events too, so the timeline can be translated
+    expect(history.every((h) => h.event === 'status_changed')).toBe(true)
   })
 })
 

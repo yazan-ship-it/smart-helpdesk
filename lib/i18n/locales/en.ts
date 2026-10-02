@@ -402,6 +402,23 @@ export const en = {
     copied: 'Copied',
     done: 'Done',
   },
+  // Ticket audit trail ({placeholders} are filled in when shown)
+  history: {
+    created: 'Ticket #{number} created',
+    auto_assigned: 'Automatically assigned to {agent} (category: {category})',
+    queued_unassigned: 'No available {category} specialist; ticket is waiting in the unassigned queue',
+    status_changed: 'Status changed from {from} to {to}',
+    status_changed_claimed: 'Ticket claimed; status changed from {from} to {to}',
+    assigned: 'Assigned to {agent} by {actor}',
+    reassigned: 'Reassigned from {from} to {agent} by {actor}',
+    reassigned_by_admin: 'Reassigned to {agent} by an admin',
+    taken_over: '{actor} took over the ticket from {from}',
+    priority_changed: 'Priority changed to {to}',
+    comment_added: '{actor} added a comment',
+    resolution_confirmed: 'The requester confirmed the fix; ticket closed',
+    reopened: 'Reopened by the requester. Reason: {reason}',
+    csat_submitted: 'Satisfaction rating: {rating}/5',
+  },
   // AI features
   ai: {
     translate: 'Translate',

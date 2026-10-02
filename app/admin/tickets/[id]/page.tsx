@@ -75,6 +75,8 @@ export default async function AdminTicketDetailPage({
  ticketHistories: ticket.ticketHistories.map(h => ({
  id: h.id,
  action: h.action,
+ event: h.event,
+ meta: h.meta,
  createdAt: h.createdAt.toISOString(),
  user: h.user,
  })),

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import * as bcrypt from 'bcryptjs'
+import { legacyEventColumns } from '../lib/history'
 
 const prisma = new PrismaClient()
 
@@ -212,39 +213,41 @@ async function main() {
   })
 
   // Add history entries
+  // Written as readable sentences here, stored with their structured event so they translate
+  const history = [
+    { ticketId: ticket1.id, userId: employee.id, action: 'Ticket #101 created' },
+    { ticketId: ticket1.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Printer)' },
+
+    { ticketId: ticket2.id, userId: employee.id, action: 'Ticket #102 created' },
+    { ticketId: ticket2.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Network)' },
+    { ticketId: ticket2.id, userId: bob.id, action: 'Status changed: ASSIGNED → IN_PROGRESS' },
+
+    { ticketId: ticket3.id, userId: employee.id, action: 'Ticket #103 created' },
+    { ticketId: ticket3.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Network)' },
+
+    { ticketId: ticket4.id, userId: employee.id, action: 'Ticket #104 created' },
+    { ticketId: ticket4.id, userId: employee.id, action: 'System auto-assigned ticket to Mike Davis based on category (Software)' },
+    { ticketId: ticket4.id, userId: mike.id, action: 'Status changed: ASSIGNED → IN_PROGRESS' },
+
+    { ticketId: ticket5.id, userId: employee.id, action: 'Ticket #105 created' },
+    { ticketId: ticket5.id, userId: employee.id, action: 'System auto-assigned ticket to Mike Davis based on category (Email & Communication)' },
+    { ticketId: ticket5.id, userId: mike.id, action: 'Status changed: ASSIGNED → IN_PROGRESS' },
+    { ticketId: ticket5.id, userId: mike.id, action: 'Status changed: IN_PROGRESS → RESOLVED' },
+
+    { ticketId: ticket6.id, userId: employee.id, action: 'Ticket #106 created' },
+    { ticketId: ticket6.id, userId: employee.id, action: 'System auto-assigned ticket to Mike Davis based on category (Hardware)' },
+    { ticketId: ticket6.id, userId: mike.id, action: 'Status changed: ASSIGNED → IN_PROGRESS' },
+    { ticketId: ticket6.id, userId: mike.id, action: 'Status changed: IN_PROGRESS → RESOLVED' },
+    { ticketId: ticket6.id, userId: mike.id, action: 'Status changed: RESOLVED → CLOSED' },
+
+    { ticketId: ticket7.id, userId: employee.id, action: 'Ticket #107 created' },
+    { ticketId: ticket7.id, userId: employee.id, action: 'No available specialist found — ticket queued in unassigned' },
+
+    { ticketId: ticket8.id, userId: employee.id, action: 'Ticket #108 created' },
+    { ticketId: ticket8.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Printer)' },
+  ]
   await prisma.ticketHistory.createMany({
-    data: [
-      { ticketId: ticket1.id, userId: employee.id, action: 'Ticket #101 created' },
-      { ticketId: ticket1.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Printer)' },
-
-      { ticketId: ticket2.id, userId: employee.id, action: 'Ticket #102 created' },
-      { ticketId: ticket2.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Network)' },
-      { ticketId: ticket2.id, userId: bob.id, action: 'Status changed: ASSIGNED → IN_PROGRESS' },
-
-      { ticketId: ticket3.id, userId: employee.id, action: 'Ticket #103 created' },
-      { ticketId: ticket3.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Network)' },
-
-      { ticketId: ticket4.id, userId: employee.id, action: 'Ticket #104 created' },
-      { ticketId: ticket4.id, userId: employee.id, action: 'System auto-assigned ticket to Mike Davis based on category (Software)' },
-      { ticketId: ticket4.id, userId: mike.id, action: 'Status changed: ASSIGNED → IN_PROGRESS' },
-
-      { ticketId: ticket5.id, userId: employee.id, action: 'Ticket #105 created' },
-      { ticketId: ticket5.id, userId: employee.id, action: 'System auto-assigned ticket to Mike Davis based on category (Email & Communication)' },
-      { ticketId: ticket5.id, userId: mike.id, action: 'Status changed: ASSIGNED → IN_PROGRESS' },
-      { ticketId: ticket5.id, userId: mike.id, action: 'Status changed: IN_PROGRESS → RESOLVED' },
-
-      { ticketId: ticket6.id, userId: employee.id, action: 'Ticket #106 created' },
-      { ticketId: ticket6.id, userId: employee.id, action: 'System auto-assigned ticket to Mike Davis based on category (Hardware)' },
-      { ticketId: ticket6.id, userId: mike.id, action: 'Status changed: ASSIGNED → IN_PROGRESS' },
-      { ticketId: ticket6.id, userId: mike.id, action: 'Status changed: IN_PROGRESS → RESOLVED' },
-      { ticketId: ticket6.id, userId: mike.id, action: 'Status changed: RESOLVED → CLOSED' },
-
-      { ticketId: ticket7.id, userId: employee.id, action: 'Ticket #107 created' },
-      { ticketId: ticket7.id, userId: employee.id, action: 'No available specialist found — ticket queued in unassigned' },
-
-      { ticketId: ticket8.id, userId: employee.id, action: 'Ticket #108 created' },
-      { ticketId: ticket8.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Printer)' },
-    ],
+    data: history.map((h) => ({ ...h, ...legacyEventColumns(h.action) })),
   })
 
   console.log('✅ Seeding complete! All 8 tickets restored in clean English IT terminology.')

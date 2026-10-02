@@ -32,6 +32,7 @@ import { SlaBadge } from '@/components/SlaBadge'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
 import AiTranslateButton from '@/app/components/AiTranslateButton'
 import AiTicketSummary from '@/app/components/AiTicketSummary'
+import { describeHistory } from '@/lib/history'
 
 type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -74,6 +75,8 @@ export type Attachment = {
  ticketHistories: Array<{
  id: string
  action: string
+ event: string | null
+ meta: string | null
  createdAt: string
  user: { name: string }
  }>
@@ -772,8 +775,8 @@ export default function TicketDetailClient({
  )
  } else {
  const h = item.data
- const isStatusAction = h.action.toLowerCase().includes('status')
- const isAssignAction = h.action.toLowerCase().includes('assign')
+ const isStatusAction = h.event === 'status_changed'
+ const isAssignAction = ['assigned', 'auto_assigned', 'reassigned_by_admin', 'taken_over'].includes(h.event ?? '')
 
  return (
  <div key={item.id} className="relative group">
@@ -794,7 +797,13 @@ export default function TicketDetailClient({
  <span className="font-semibold text-foreground">
  {h.user.name}
  </span>
- <span className="text-muted-foreground">{h.action}</span>
+ <span className="text-muted-foreground">
+   {describeHistory(h, h.user.name, t, {
+     status: (s) => getStatusLabel(s, locale),
+     priority: (p) => getPriorityLabel(p, locale),
+     category: (c) => getCategoryLabel(c, locale),
+   })}
+ </span>
  <span>•</span>
  <span className="text-muted-foreground">{formatRelativeTime(h.createdAt, locale)}</span>
  </div>

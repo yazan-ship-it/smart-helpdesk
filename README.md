@@ -18,6 +18,7 @@ An enterprise-grade IT Support Ticket Management System built with **Next.js 16 
   - [Bilingual Localization & RTL/LTR Engine](#4-bilingual-localization--rtlltr-engine)
   - [Agent Operational Workflows & Drawers](#5-agent-operational-workflows--drawers)
   - [Multi-Theme & Modern Aesthetic System](#6-multi-theme--modern-aesthetic-system)
+  - [Security](#7-security)
 - [Environment Variables](#-environment-variables)
 - [Installation & Quick Start](#-installation--quick-start)
 - [Automated Testing Suite](#-automated-testing-suite)
@@ -50,7 +51,7 @@ This platform solves these challenges through:
 | **Styling & Design** | Tailwind CSS + CSS Design Tokens | Clean typography, dark/light adaptive surfaces, and zero-border minimalism |
 | **Motion & Charts** | Framer Motion & Recharts | Micro-animations, interactive layout transitions, and queue distribution graphs |
 | **Internationalization** | Custom Context Engine + Cookies | Instant zero-reload locale toggling, bidirectional layout (`rtl`/`ltr`) |
-| **Testing** | Vitest | 105 unit and integration tests that call the real actions, pages and API routes |
+| **Testing** | Vitest | 139 unit and integration tests that call the real actions, pages and API routes |
 
 ---
 
@@ -148,7 +149,7 @@ erDiagram
 
 ## 👥 Pre-Seeded Test Accounts
 
-The platform includes 4 pre-configured corporate accounts representing all administrative, operational, and end-user personas. These accounts are also accessible via **1-Click Quick Demo Login** on the `/login` page.
+The platform includes 4 pre-configured corporate accounts representing all administrative, operational, and end-user personas. When `DEMO_MODE=true`, the `/login` page also offers them as **1-click demo logins** (off by default, because it puts the passwords in the page).
 
 | Persona | Name | Email | Password | Role | Permissions & Domain Focus |
 |---|---|---|---|---|---|
@@ -163,7 +164,7 @@ The platform includes 4 pre-configured corporate accounts representing all admin
 
 ### 1. Role-Based Access Control (RBAC)
 - **Data Isolation:** Employees can *only* query and view tickets created by their account. IT Support and Admins have visibility into the comprehensive organizational queue.
-- **Server-Side Verification:** Every Server Action (`app/actions/tickets.ts`, `app/actions/auth.ts`) cryptographically inspects the JWT payload session cookie before database execution.
+- **Server-Side Verification:** Every page, Server Action and API route checks the signed session cookie **and** the user's current record in the database, so the role used is always the current one (see [Security](#7-security)).
 - **Zero Client Trust:** UI controls for assignment, internal notes, and status transitions are completely omitted for unauthorized roles.
 
 ### 2. Deterministic Ticket State Machine
@@ -201,18 +202,32 @@ $$\mathbf{OPEN} \longrightarrow \mathbf{ASSIGNED} \longrightarrow \mathbf{IN\_PR
 - **Theme Modes:** Supports Light Mode, Dark Mode, and System Default.
 - **Accent Palettes:** Configurable branding accents including Corporate Blue, Slate, Indigo/Violet, and Emerald Green.
 
+### 7. Security
+- **Sessions checked on every request** (`lib/session-check.ts`): suspending, rejecting or deleting a user, changing their role, or turning on maintenance mode takes effect on their next click. The cookie is removed and the login page says why. Changing a password signs out the user's other devices (`User.sessionVersion`).
+- **Rate limits** (`lib/rate-limit.ts`, stored in the database so they hold across restarts and servers):
+  - Sign-in: 5 failures lock the account for 15 minutes; 20 failures lock the client address.
+  - Account requests: 5 per hour per address.
+  - AI: 30 Gemini requests per user per 10 minutes. Over the limit, triage falls back to the keyword rules.
+- **Nothing from the browser is trusted:** categories must be the admin's, priorities and lengths are checked, attachments must point at files the upload API created, tickets can only be assigned to active IT staff, and a ticket can be rated once.
+- **Concurrency:** ticket numbers can't collide (transaction + retry on the unique index), and a status change or take-over only applies if nobody changed the ticket first.
+- **No account enumeration:** the login and account request forms answer the same way whether or not an email is registered.
+- **Admins can't lock themselves out:** they cannot suspend or demote their own account.
+- **Headers:** no framing (clickjacking), `nosniff`, referrer and permissions policies, HSTS.
+- **Errors** are returned as codes (`lib/errors.ts`) and shown in the user's language.
+
 ---
 
 ## 🔐 Environment Variables
 
-Create a `.env` file in the root directory with the following configuration:
+Copy `.env.example` to `.env` and fill it in:
 
 ```env
 # Database Connection (SQLite local file)
 DATABASE_URL="file:./dev.db"
 
-# JWT Secret for Session Cookie Encryption (min. 32 characters)
-SESSION_SECRET="super-secret-key-change-in-production-min-32-chars"
+# Signs the session cookie: a random value of at least 32 characters, e.g.
+#   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+SESSION_SECRET="..."
 
 # Google Gemini API Key (triage suggestions, summaries, translation)
 # Get one at https://aistudio.google.com/apikey
@@ -221,6 +236,9 @@ GEMINI_API_KEY="your-gemini-api-key-here"
 # Optional: override the models (e.g. when Google retires one)
 # GEMINI_MODEL="gemini-2.5-flash"
 # GEMINI_FALLBACK_MODEL="gemini-2.5-flash-lite"   # "none" to disable
+
+# 1-click demo logins for the seeded accounts (never with real users)
+DEMO_MODE="false"
 ```
 
 > **Without a key** the app still works: triage suggestions come from labelled keyword rules (if enabled in Settings), and summaries/translation report that AI is not configured. Google's free tier allows only a few requests per minute per model, which is why a fallback model is used.
@@ -243,14 +261,17 @@ cd smart-helpdesk
 # 2. Install dependencies
 npm install
 
-# 3. Synchronize database schema
+# 3. Configure (then edit .env)
+cp .env.example .env
+
+# 4. Synchronize database schema
 npx prisma db push
 
-# 4. Populate default database seed (Users, Categories, Seed Tickets #101-#108)
+# 5. Populate default database seed (Users, Categories, Seed Tickets #101-#108)
 #    Warning: this deletes existing users and tickets
 npm run db:seed
 
-# 5. Launch development server with Turbopack
+# 6. Launch development server with Turbopack
 npm run dev
 ```
 
@@ -274,7 +295,7 @@ npm test
 npm run test:watch
 ```
 
-### Test Coverage Breakdown (105/105 Passing)
+### Test Coverage Breakdown (139/139 Passing)
 
 ```
 ✓ tests/ai-triage.test.ts (10 tests)
@@ -298,7 +319,7 @@ npm run test:watch
     ✓ fails when every model is rate-limited, so callers can fall back honestly
     ✓ disables thinking on 2.5 models for speed
     ✓ rejects a triage answer with a category the admin does not have
-✓ tests/helpdesk.test.ts (72 tests)
+✓ tests/helpdesk.test.ts (106 tests)
   ✓ Test 1: User Login (7)
     ✓ valid credentials create a session for the user and redirect to their tickets
     ✓ IT_SUPPORT is redirected to their assigned queue
@@ -359,7 +380,7 @@ npm run test:watch
     ✓ records the close time, and reopening clears both times but keeps the breach
     ✓ the admin "SLA breaches" view lists overdue and late-resolved tickets only
     ✓ the "pending requests" link opens the users page filtered to pending accounts
-  ✓ Test 9: Admin Settings (10)
+  ✓ Test 9: Admin Settings (11)
     ✓ only admins can change settings
     ✓ rejects an unknown priority
     ✓ rejects negative SLA hours
@@ -369,6 +390,7 @@ npm run test:watch
     ✓ rejects an invalid work day
     ✓ rejects no categories
     ✓ rejects a bad email
+    ✓ rejects a domain without @
     ✓ saves valid settings
   ✓ Test 10: Invites & Passwords (10)
     ✓ only admins can invite users
@@ -381,6 +403,43 @@ npm run test:watch
     ✓ rejects the change when the new password equals the old one
     ✓ setting a password activates the account and continues into the app
     ✓ any user can change their password later without being redirected
+  ✓ Test 11: Sessions (10)
+    ✓ an active user keeps their session, with role and name read from the database
+    ✓ a role taken away ends admin access on the next request
+    ✓ a SUSPENDED account is signed out and told why
+    ✓ a REJECTED account is signed out and told why
+    ✓ a PENDING account is signed out and told why
+    ✓ a deleted account is signed out
+    ✓ on the login page an ended session is cleared without a redirect loop
+    ✓ changing the password signs out other devices but keeps this one
+    ✓ maintenance mode ends the sessions of everyone but admins
+    ✓ demo logins are only offered when DEMO_MODE=true
+  ✓ Test 12: Sign-in Rate Limiting (4)
+    ✓ locks an account for 15 minutes after 5 wrong passwords, even for the right password
+    ✓ allows the account again once the 15-minute window has passed
+    ✓ a successful sign-in resets the count of failures
+    ✓ locks out an address that tries many accounts
+  ✓ Test 13: Server-side Validation (16)
+    ✓ a ticket needs one of the admin categories and a real priority
+    ✓ rejects attachments with a link to another site
+    ✓ rejects attachments with a path outside the uploads folder
+    ✓ rejects attachments with a file type that is not allowed
+    ✓ rejects attachments with more than 5 files
+    ✓ rejects attachments with something that is not a list
+    ✓ stores uploaded attachments with the type taken from the file, not the browser
+    ✓ tickets created at the same moment still get different numbers
+    ✓ tickets can only be given to active IT support staff
+    ✓ a closed ticket cannot be taken over or reassigned
+    ✓ when two agents claim the same ticket at once, only one wins
+    ✓ comments must exist, be non-empty and not too long, on a real ticket
+    ✓ a ticket can be rated once, from 1 to 5, after it is resolved
+    ✓ an admin cannot suspend or demote themselves
+    ✓ the account request form does not reveal whether an email is registered
+    ✓ limits account requests from one address
+  ✓ Test 14: AI Usage Limit (3)
+    ✓ counts each AI request against the user
+    ✓ over the limit, triage answers with the keyword rules without calling Gemini
+    ✓ over the limit, summaries and translation are refused
 ✓ tests/history.test.ts (13 tests)
   ✓ ticket audit trail (13)
     ✓ stores the event, its data and an English sentence
@@ -408,9 +467,9 @@ npm run test:watch
 
 1. **Advisory AI:** Suggestions and summaries assist people; they never change a ticket on their own.
 2. **No email yet:** Invites show a one-time password to the admin, and password resets are done by IT.
-3. **Sessions are not re-checked against the database:** a suspended user or a changed role takes effect at next sign-in (planned next).
-4. **SQLite and local file uploads:** fine for the assessment; a real deployment should use PostgreSQL and object storage. The SQLite migrations in `prisma/migrations` predate several schema changes, so set up with `prisma db push`.
-5. **Server error messages:** a few rare server-side errors (e.g., an invalid status transition) are still in English.
+3. **SQLite and local file uploads:** fine for the assessment; a real deployment should use PostgreSQL and object storage. The SQLite migrations in `prisma/migrations` predate several schema changes, so set up with `prisma db push`.
+4. **Attachments are public by link:** uploaded files are served from `/public/uploads` under random, unguessable names, without a sign-in check. Moving them to private object storage is planned with the deployment work.
+5. **Behind a proxy:** per-address rate limits use `X-Forwarded-For`, so a deployment must sit behind a reverse proxy that sets it.
 ---
 
 ## 📂 Project Directory Structure
@@ -439,7 +498,11 @@ smart-helpdesk/
 │   ├── gemini.ts              # Gemini client: model fallback, triage, summaries, translation
 │   ├── history.ts             # Typed audit-trail events and their display
 │   ├── session.ts             # JWT session cookie via jose
-│   ├── settings.ts / skills.ts / sla.ts / uploads.ts
+│   ├── session-check.ts       # Session re-checked against the database
+│   ├── rate-limit.ts          # Sign-in, account request and AI limits
+│   ├── errors.ts              # Error codes shown in the user's language
+│   ├── demo.ts                # 1-click demo logins (DEMO_MODE)
+│   ├── settings.ts / skills.ts / sla.ts / uploads.ts / ticket-rules.ts
 │   └── i18n/                  # Arabic/English dictionaries and provider
 ├── prisma/
 │   ├── schema.prisma          # Database models
@@ -449,7 +512,7 @@ smart-helpdesk/
 │   ├── run-ts.js              # Run TypeScript files with plain Node
 │   ├── seed.js                # npm run db:seed
 │   └── backfill-history-events.ts # One-off audit-trail conversion
-├── tests/                     # 105 Vitest tests (5 files)
+├── tests/                     # 139 Vitest tests (5 files)
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
@@ -461,7 +524,7 @@ smart-helpdesk/
 
 | Requirement | Implementation Verification | Status |
 |---|---|---|
-| **Role-Based Authentication** | JWT with `jose`, bcrypt hashing, dual role enforcement (`EMPLOYEE`, `IT_SUPPORT`, `ADMIN`) | ✅ Complete |
+| **Role-Based Authentication** | JWT with `jose` re-checked against the database, bcrypt hashing, sign-in rate limiting, roles `EMPLOYEE`, `IT_SUPPORT`, `ADMIN` | ✅ Complete |
 | **Data Isolation** | Employees restricted to own tickets; IT/Admin view entire queue; verified via 8 automated tests | ✅ Complete |
 | **Ticket Lifecycle Machine** | `OPEN → ASSIGNED → IN_PROGRESS → RESOLVED → CLOSED`; invalid/backward transitions rejected | ✅ Complete |
 | **Audit Logging** | Every status change, assignment and comment logged in `TicketHistory` as a typed, translatable event | ✅ Complete |
@@ -470,7 +533,7 @@ smart-helpdesk/
 | **Bilingual Localization** | Native Arabic (RTL) & English (LTR) language support with persistent cookies/localStorage | ✅ Complete |
 | **Analytics Dashboard** | KPI cards, SLA countdown badges and status chart; the list refreshes every 30s | ✅ Complete |
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
-| **Automated Testing** | 105 unit & integration tests against the real code, all passing | ✅ Complete |
+| **Automated Testing** | 139 unit & integration tests against the real code, all passing | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
 
 ---

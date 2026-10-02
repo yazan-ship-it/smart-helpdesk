@@ -291,6 +291,20 @@ export const ar: TranslationDictionary = {
       invite: 'دعوة مستخدم',
     },
   },
+  // AI features
+  ai: {
+    translate: 'ترجمة',
+    showTranslation: 'إظهار الترجمة',
+    hideTranslation: 'إخفاء',
+    translating: 'جاري الترجمة…',
+    machineTranslation: 'ترجمة آلية (Gemini)',
+    retry: 'إعادة المحاولة',
+    errors: {
+      not_configured: 'الترجمة بالذكاء الاصطناعي غير مفعّلة على هذا الخادم.',
+      too_long: 'هذا النص أطول من أن تتم ترجمته.',
+      failed: 'فشلت الترجمة، يرجى المحاولة مرة أخرى.',
+    },
+  },
   // Language Switcher
   language: {
     toggle: 'English',

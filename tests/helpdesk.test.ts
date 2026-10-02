@@ -22,7 +22,13 @@ vi.mock('next/navigation', () => ({
     throw new Error('NEXT_NOT_FOUND')
   }),
 }))
-vi.mock('@/lib/gemini', () => ({ triageTicket: vi.fn(), translateText: vi.fn(), summarizeTicket: vi.fn() }))
+vi.mock('@/lib/gemini', () => ({
+  isAiConfigured: vi.fn(() => true),
+  triageTicket: vi.fn(),
+  translateText: vi.fn(),
+  summarizeTicket: vi.fn(),
+  AiNotConfiguredError: class AiNotConfiguredError extends Error {},
+}))
 // Pages are called directly; their client components only receive props.
 vi.mock('@/app/tickets/TicketListClient', () => ({ default: () => null }))
 vi.mock('@/app/tickets/[id]/TicketDetailClient', () => ({ default: () => null }))
@@ -32,7 +38,7 @@ import path from 'path'
 import type { ReactElement } from 'react'
 import { NextRequest } from 'next/server'
 import { getSession, createSession, type Role, type SessionPayload } from '@/lib/session'
-import { triageTicket, translateText } from '@/lib/gemini'
+import { AiNotConfiguredError, isAiConfigured, summarizeTicket, triageTicket, translateText } from '@/lib/gemini'
 import { login } from '@/app/actions/auth'
 import {
   createTicket,
@@ -49,7 +55,7 @@ import TicketsPage from '@/app/tickets/page'
 import TicketDetailPage from '@/app/tickets/[id]/page'
 import { POST as uploadPOST } from '@/app/api/upload/route'
 import { POST as triagePOST } from '@/app/api/ai/triage/route'
-import { POST as translatePOST } from '@/app/api/ai/translate/route'
+import { POST as summarizePOST } from '@/app/api/ai/summarize/[id]/route'
 
 const prisma = new PrismaClient()
 
@@ -476,19 +482,116 @@ describe('Test 6: API Authentication & Upload Safety', () => {
     expect(triageTicket).not.toHaveBeenCalled()
   })
 
-  it('AI translate route rejects unauthenticated requests without calling Gemini', async () => {
-    signedOut()
-    vi.mocked(translateText).mockClear()
-    const res = await translatePOST(jsonRequest('http://localhost/api/ai/translate', { text: 'hello', targetLanguage: 'Arabic' }))
-    expect(res.status).toBe(401)
-    expect(translateText).not.toHaveBeenCalled()
-  })
-
   it('translateAction rejects unauthenticated callers without calling Gemini', async () => {
     signedOut()
     vi.mocked(translateText).mockClear()
     const result = await translateAction({ text: 'hello', targetLanguage: 'Arabic' })
     expect(result.success).toBe(false)
     expect(translateText).not.toHaveBeenCalled()
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 7: AI Features — honest results, admin settings respected
+// ────────────────────────────────────────────────────────
+describe('Test 7: AI Features', () => {
+  type SettingsBackup = { enableAiTriage: boolean; fallbackHeuristicsEnabled: boolean } | null
+  let backup: SettingsBackup = null
+  let ticketId: string
+
+  const triageRequest = (body: unknown) =>
+    new NextRequest('http://localhost/api/ai/triage', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json' },
+    })
+
+  const setAiSettings = (data: { enableAiTriage?: boolean; fallbackHeuristicsEnabled?: boolean }) =>
+    prisma.appSettings.upsert({ where: { id: 'singleton' }, create: { id: 'singleton', ...data }, update: data })
+
+  beforeAll(async () => {
+    backup = await prisma.appSettings.findUnique({
+      where: { id: 'singleton' },
+      select: { enableAiTriage: true, fallbackHeuristicsEnabled: true },
+    })
+    ticketId = await createTestTicket(employeeId)
+  })
+
+  afterAll(async () => {
+    if (backup) await prisma.appSettings.update({ where: { id: 'singleton' }, data: backup })
+    vi.mocked(isAiConfigured).mockReturnValue(true)
+  })
+
+  it('triage returns the Gemini answer labelled as AI', async () => {
+    await setAiSettings({ enableAiTriage: true, fallbackHeuristicsEnabled: true })
+    signInAs(employeeId, 'EMPLOYEE')
+    vi.mocked(triageTicket).mockResolvedValueOnce({
+      category: 'Network',
+      priority: 'HIGH',
+      selfHelp: ['Reconnect the VPN'],
+      reason: 'VPN issue',
+    })
+    const res = await triagePOST(triageRequest({ title: 'VPN drops', description: 'every 10 minutes', locale: 'ar' }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ source: 'ai', category: 'Network', priority: 'HIGH' })
+    expect(vi.mocked(triageTicket).mock.lastCall?.[3]).toBe('ar')
+  })
+
+  it('triage falls back to keyword rules, labelled as rules, when Gemini fails', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    vi.mocked(triageTicket).mockRejectedValueOnce(new Error('quota exceeded'))
+    const res = await triagePOST(triageRequest({ title: 'Printer jammed', description: 'paper stuck' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.source).toBe('rules')
+    expect(body.category).toBe('Printer')
+    expect(body).not.toHaveProperty('matchScore')
+  })
+
+  it('triage returns 503 instead of guessing when the admin disabled the fallback', async () => {
+    await setAiSettings({ fallbackHeuristicsEnabled: false })
+    signInAs(employeeId, 'EMPLOYEE')
+    vi.mocked(isAiConfigured).mockReturnValueOnce(false)
+    const res = await triagePOST(triageRequest({ title: 'Printer jammed', description: 'paper stuck' }))
+    expect(res.status).toBe(503)
+  })
+
+  it('triage is refused when the admin turned AI triage off', async () => {
+    await setAiSettings({ enableAiTriage: false, fallbackHeuristicsEnabled: true })
+    signInAs(employeeId, 'EMPLOYEE')
+    vi.mocked(triageTicket).mockClear()
+    const res = await triagePOST(triageRequest({ title: 'Printer jammed', description: 'paper stuck' }))
+    expect(res.status).toBe(403)
+    expect(triageTicket).not.toHaveBeenCalled()
+    await setAiSettings({ enableAiTriage: true })
+  })
+
+  it('ticket summaries are only available to IT support and admins', async () => {
+    const summarize = (id: string) =>
+      summarizePOST(new NextRequest(`http://localhost/api/ai/summarize/${id}?locale=ar`, { method: 'POST' }), {
+        params: Promise.resolve({ id }),
+      })
+
+    signInAs(employeeId, 'EMPLOYEE')
+    expect((await summarize(ticketId)).status).toBe(403)
+
+    vi.mocked(summarizeTicket).mockResolvedValueOnce({ summary: 'S', nextAction: 'N' })
+    signInAs(itSupportId, 'IT_SUPPORT')
+    const res = await summarize(ticketId)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ summary: 'S', nextAction: 'N' })
+    expect(vi.mocked(summarizeTicket).mock.lastCall?.[2]).toBe('ar')
+  })
+
+  it('translation reports an honest error instead of inventing text', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    vi.mocked(translateText).mockRejectedValueOnce(new AiNotConfiguredError())
+    expect(await translateAction({ text: 'hello', targetLanguage: 'Arabic' })).toEqual({ success: false, error: 'not_configured' })
+
+    vi.mocked(translateText).mockRejectedValueOnce(new Error('network'))
+    expect(await translateAction({ text: 'hello', targetLanguage: 'Arabic' })).toEqual({ success: false, error: 'failed' })
+
+    vi.mocked(translateText).mockResolvedValueOnce('مرحبا')
+    expect(await translateAction({ text: 'hello', targetLanguage: 'Arabic' })).toEqual({ success: true, translation: 'مرحبا' })
   })
 })

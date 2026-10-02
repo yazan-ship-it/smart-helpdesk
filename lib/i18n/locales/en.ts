@@ -289,6 +289,20 @@ export const en = {
       invite: 'Invite User',
     },
   },
+  // AI features
+  ai: {
+    translate: 'Translate',
+    showTranslation: 'Show translation',
+    hideTranslation: 'Hide',
+    translating: 'Translating…',
+    machineTranslation: 'Machine translation (Gemini)',
+    retry: 'Retry',
+    errors: {
+      not_configured: 'AI translation is not set up on this server.',
+      too_long: 'This text is too long to translate.',
+      failed: 'Translation failed. Please try again.',
+    },
+  },
   // Language Switcher
   language: {
     toggle: 'العربية',

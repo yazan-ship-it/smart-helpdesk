@@ -5,8 +5,11 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { createSession, deleteSession, getSession, type Role } from '@/lib/session'
 
+/** Error codes; the login page shows them in the user's language */
+export type LoginError = 'missing_fields' | 'invalid_credentials' | 'pending' | 'rejected' | 'suspended' | 'maintenance'
+
 export type AuthState = {
- error?: string
+ error?: LoginError
 } | undefined
 
 export type RegisterState = {
@@ -22,55 +25,37 @@ export type RegisterState = {
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 export async function login(prevState: AuthState, formData: FormData): Promise<AuthState> {
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
+  const email = (formData.get('email') as string | null)?.trim().toLowerCase()
+  const password = formData.get('password') as string | null
+  const remember = formData.get('rememberMe') === 'on'
 
-  if (!email || !password) {
-    return { error: 'Email and password are required.' }
-  }
+  if (!email || !password) return { error: 'missing_fields' }
 
   const user = await prisma.user.findUnique({ where: { email } })
-
-  if (!user) {
-    return { error: 'Invalid email or password.' }
+  // Same error for unknown email and wrong password, so accounts can't be enumerated
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    return { error: 'invalid_credentials' }
   }
 
-  const passwordMatch = await bcrypt.compare(password, user.password)
+  if (user.accountStatus === 'PENDING') return { error: 'pending' }
+  if (user.accountStatus === 'REJECTED') return { error: 'rejected' }
+  if (user.accountStatus === 'SUSPENDED') return { error: 'suspended' }
 
-  if (!passwordMatch) {
-    return { error: 'Invalid email or password.' }
-  }
+  const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' }, select: { maintenanceMode: true } })
+  if (settings?.maintenanceMode && user.role !== 'ADMIN') return { error: 'maintenance' }
 
-  // ── Account Status Guard ──────────────────────────────────────────────────
-  if (user.accountStatus === 'PENDING') {
-    return { error: 'Your account is currently pending Admin approval.' }
-  }
-  if (user.accountStatus === 'REJECTED') {
-    return { error: 'Your account request was rejected. Please contact your administrator.' }
-  }
-  if (user.accountStatus === 'SUSPENDED') {
-    return { error: 'Your account has been suspended. Please contact your administrator.' }
-  }
-
-  // Update last login time
   await prisma.user.update({
     where: { id: user.id },
-    data: { lastLoginAt: new Date() }
+    data: { lastLoginAt: new Date() },
   })
 
-  await createSession({
-    userId: user.id,
-    role: user.role as Role,
-    name: user.name,
-    email: user.email,
-  })
+  await createSession(
+    { userId: user.id, role: user.role as Role, name: user.name, email: user.email },
+    { remember },
+  )
 
-  if (user.role === 'ADMIN') {
-    redirect('/admin/users')
-  }
-  if (user.role === 'IT_SUPPORT') {
-    redirect('/tickets?queue=assigned_to_me')
-  }
+  if (user.role === 'ADMIN') redirect('/admin/users')
+  if (user.role === 'IT_SUPPORT') redirect('/tickets?queue=assigned_to_me')
   redirect('/tickets')
 }
 

@@ -149,12 +149,10 @@ describe('Test 1: User Login', () => {
     await expect(login(undefined, form({ email: employeeEmail, password: PASSWORD }))).rejects.toThrow(
       /^NEXT_REDIRECT \/tickets$/
     )
-    expect(createSession).toHaveBeenCalledWith({
-      userId: employeeId,
-      role: 'EMPLOYEE',
-      name: 'Test Employee',
-      email: employeeEmail,
-    })
+    expect(createSession).toHaveBeenCalledWith(
+      { userId: employeeId, role: 'EMPLOYEE', name: 'Test Employee', email: employeeEmail },
+      { remember: false },
+    )
     const user = await prisma.user.findUnique({ where: { id: employeeId } })
     expect(user?.lastLoginAt).not.toBeNull()
   })
@@ -168,19 +166,40 @@ describe('Test 1: User Login', () => {
   it('wrong password is rejected without creating a session', async () => {
     vi.mocked(createSession).mockClear()
     const result = await login(undefined, form({ email: employeeEmail, password: 'wrongpassword' }))
-    expect(result).toEqual({ error: 'Invalid email or password.' })
+    expect(result).toEqual({ error: 'invalid_credentials' })
     expect(createSession).not.toHaveBeenCalled()
   })
 
   it('unknown email gets the same generic error (no account enumeration)', async () => {
     const result = await login(undefined, form({ email: `nobody-${stamp}@test.com`, password: PASSWORD }))
-    expect(result).toEqual({ error: 'Invalid email or password.' })
+    expect(result).toEqual({ error: 'invalid_credentials' })
+  })
+
+  it('"remember me" asks for a long-lived session, and email case does not matter', async () => {
+    vi.mocked(createSession).mockClear()
+    await expect(
+      login(undefined, form({ email: employeeEmail.toUpperCase(), password: PASSWORD, rememberMe: 'on' }))
+    ).rejects.toThrow('NEXT_REDIRECT')
+    expect(vi.mocked(createSession).mock.lastCall?.[1]).toEqual({ remember: true })
+  })
+
+  it('maintenance mode keeps everyone but admins out', async () => {
+    const setting = await prisma.appSettings.findUnique({ where: { id: 'singleton' }, select: { maintenanceMode: true } })
+    try {
+      await prisma.appSettings.update({ where: { id: 'singleton' }, data: { maintenanceMode: true } })
+      expect(await login(undefined, form({ email: employeeEmail, password: PASSWORD }))).toEqual({ error: 'maintenance' })
+      await expect(
+        login(undefined, form({ email: `test-admin-${stamp}@test.com`, password: PASSWORD }))
+      ).rejects.toThrow('NEXT_REDIRECT /admin/users')
+    } finally {
+      if (setting) await prisma.appSettings.update({ where: { id: 'singleton' }, data: setting })
+    }
   })
 
   it('accounts pending approval cannot log in', async () => {
     vi.mocked(createSession).mockClear()
     const result = await login(undefined, form({ email: pendingEmail, password: PASSWORD }))
-    expect(result?.error).toMatch(/pending/i)
+    expect(result).toEqual({ error: 'pending' })
     expect(createSession).not.toHaveBeenCalled()
   })
 })

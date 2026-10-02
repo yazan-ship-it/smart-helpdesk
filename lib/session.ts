@@ -19,13 +19,16 @@ if (!secretKey) {
 const encodedKey = new TextEncoder().encode(secretKey)
 
 const COOKIE_NAME = 'helpdesk-session'
-const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000 // 7 days
+/** "Remember me": a persistent cookie for 30 days */
+const REMEMBER_DURATION = 30 * 24 * 60 * 60 * 1000
+/** Otherwise: a browser-session cookie, and the token itself expires after a working day */
+const SESSION_DURATION = 12 * 60 * 60 * 1000
 
 export async function encrypt(payload: SessionPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
+    .setExpirationTime(new Date(payload.expiresAt))
     .sign(encodedKey)
 }
 
@@ -41,15 +44,19 @@ export async function decrypt(session: string | undefined): Promise<SessionPaylo
   }
 }
 
-export async function createSession(payload: Omit<SessionPayload, 'expiresAt'>): Promise<void> {
-  const expiresAt = new Date(Date.now() + SESSION_DURATION)
+export async function createSession(
+  payload: Omit<SessionPayload, 'expiresAt'>,
+  { remember }: { remember: boolean },
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + (remember ? REMEMBER_DURATION : SESSION_DURATION))
   const session = await encrypt({ ...payload, expiresAt })
   const cookieStore = await cookies()
 
   cookieStore.set(COOKIE_NAME, session, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    expires: expiresAt,
+    // Without "remember me" there is no expiry, so the browser drops the cookie when it closes
+    ...(remember ? { expires: expiresAt } : {}),
     sameSite: 'lax',
     path: '/',
   })
@@ -64,21 +71,4 @@ export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies()
   const cookie = cookieStore.get(COOKIE_NAME)
   return decrypt(cookie?.value)
-}
-
-export async function updateSession(): Promise<void> {
-  const session = await getSession()
-  if (!session) return
-
-  const expiresAt = new Date(Date.now() + SESSION_DURATION)
-  const cookieStore = await cookies()
-  const token = await encrypt({ ...session, expiresAt })
-
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    expires: expiresAt,
-    sameSite: 'lax',
-    path: '/',
-  })
 }

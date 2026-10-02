@@ -7,23 +7,23 @@ import { prisma } from '@/lib/db'
 import { requireAdmin } from '@/app/actions/auth'
 import { getAppSettings, parseCategories } from '@/lib/settings'
 import { sanitizeSkills } from '@/lib/skills'
+import { fail, type ActionResult } from '@/lib/errors'
 
 export type AccountStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED'
 
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const NAME_MAX = 100
 
 // ─── Update User Account Status (Approve / Reject / Suspend) ────────────────────────────
-export async function updateUserStatus(
-  userId: string,
-  status: AccountStatus,
-): Promise<{ error?: string }> {
-  await requireAdmin()
+export async function updateUserStatus(userId: string, status: AccountStatus): Promise<ActionResult> {
+  const admin = await requireAdmin()
 
-  if (!['APPROVED', 'REJECTED', 'PENDING', 'SUSPENDED'].includes(status)) {
-    return { error: 'Invalid status value.' }
-  }
+  if (!['APPROVED', 'REJECTED', 'PENDING', 'SUSPENDED'].includes(status)) return fail('invalid_status')
+  // An admin could otherwise lock themselves (or the last admin) out
+  if (userId === admin.userId) return fail('cannot_change_self')
 
   const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) return { error: 'User not found.' }
+  if (!user) return fail('not_found')
 
   await prisma.user.update({
     where: { id: userId },
@@ -35,20 +35,13 @@ export async function updateUserStatus(
 }
 
 // ─── Bulk Update User Account Status ──────────────────────────────────────────
-export async function bulkUpdateUserStatus(
-  userIds: string[],
-  status: 'APPROVED' | 'REJECTED',
-): Promise<{ error?: string }> {
+export async function bulkUpdateUserStatus(userIds: string[], status: 'APPROVED' | 'REJECTED'): Promise<ActionResult> {
   await requireAdmin()
 
-  if (!['APPROVED', 'REJECTED'].includes(status)) {
-    return { error: 'Invalid status value.' }
-  }
-  
-  if (!userIds || userIds.length === 0) {
-    return { error: 'No users selected.' }
-  }
+  if (!['APPROVED', 'REJECTED'].includes(status)) return fail('invalid_status')
+  if (!Array.isArray(userIds) || userIds.length === 0) return fail('no_users_selected')
 
+  // Only pending requests are decided here
   await prisma.user.updateMany({
     where: { id: { in: userIds }, accountStatus: 'PENDING' },
     data: { accountStatus: status },
@@ -63,15 +56,14 @@ export async function updateUserRole(
   userId: string,
   role: 'EMPLOYEE' | 'IT_SUPPORT' | 'ADMIN',
   skills: string[] = [],
-): Promise<{ error?: string }> {
-  await requireAdmin()
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
 
-  if (!['EMPLOYEE', 'IT_SUPPORT', 'ADMIN'].includes(role)) {
-    return { error: 'Invalid role.' }
-  }
+  if (!['EMPLOYEE', 'IT_SUPPORT', 'ADMIN'].includes(role)) return fail('invalid_role')
 
   const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user) return { error: 'User not found.' }
+  if (!user) return fail('not_found')
+  if (userId === admin.userId && role !== 'ADMIN') return fail('cannot_change_self')
 
   const dataToUpdate = {
     role,
@@ -100,18 +92,16 @@ export async function inviteUser(input: {
   name: string
   email: string
   role: (typeof INVITE_ROLES)[number]
-}): Promise<{ error?: string; tempPassword?: string }> {
+}): Promise<ActionResult & { tempPassword?: string }> {
   await requireAdmin()
 
-  const name = input.name?.trim()
-  const email = input.email?.trim().toLowerCase()
-  if (!name || name.length < 2) return { error: 'Please enter the name of the person.' }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Invalid email address.' }
-  if (!INVITE_ROLES.includes(input.role)) return { error: 'Invalid role.' }
+  const name = typeof input.name === 'string' ? input.name.trim() : ''
+  const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : ''
+  if (name.length < 2 || name.length > NAME_MAX) return fail('name_required')
+  if (!EMAIL.test(email) || email.length > 254) return fail('invalid_email')
+  if (!INVITE_ROLES.includes(input.role)) return fail('invalid_role')
 
-  if (await prisma.user.findUnique({ where: { email } })) {
-    return { error: 'A user with this email already exists.' }
-  }
+  if (await prisma.user.findUnique({ where: { email } })) return fail('email_taken')
 
   const tempPassword = generateTemporaryPassword()
   await prisma.user.create({

@@ -3,10 +3,10 @@
 import bcrypt from 'bcryptjs'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
-import { MIN_PASSWORD_LENGTH } from '@/lib/passwords'
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@/lib/passwords'
 import { createSession, getSession } from '@/lib/session'
 
-export type ChangePasswordError = 'unauthorized' | 'wrong_current' | 'too_short' | 'mismatch' | 'same_as_current'
+export type ChangePasswordError = 'unauthorized' | 'wrong_current' | 'too_short' | 'too_long' | 'mismatch' | 'same_as_current'
 export type ChangePasswordState = { error?: ChangePasswordError; success?: boolean } | undefined
 
 export async function changePassword(_prev: ChangePasswordState, formData: FormData): Promise<ChangePasswordState> {
@@ -21,6 +21,7 @@ export async function changePassword(_prev: ChangePasswordState, formData: FormD
   if (!user) return { error: 'unauthorized' }
   if (!(await bcrypt.compare(current, user.password))) return { error: 'wrong_current' }
   if (next.length < MIN_PASSWORD_LENGTH) return { error: 'too_short' }
+  if (next.length > MAX_PASSWORD_LENGTH) return { error: 'too_long' }
   if (next !== confirm) return { error: 'mismatch' }
   if (next === current) return { error: 'same_as_current' }
 

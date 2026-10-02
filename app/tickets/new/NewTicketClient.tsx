@@ -21,6 +21,7 @@ import {
 import { createTicket, type TicketState } from '@/app/actions/tickets'
 import { useTranslation, getCategoryLabel, getPriorityLabel } from '@/lib/i18n'
 import { PRIORITIES, type Priority, type TriageSuggestion } from '@/lib/ai/triage'
+import { DESCRIPTION_MAX, TITLE_MAX } from '@/lib/ticket-rules'
 import { ACCEPT_ATTRIBUTE, ALLOWED_TYPES, MAX_FILES, MAX_FILE_SIZE, MAX_FILE_SIZE_MB, fileExtension } from '@/lib/uploads'
 
 type Attachment = { name: string; size: number; type: string; url: string; preview?: string }
@@ -70,7 +71,7 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
   const [beforeApply, setBeforeApply] = useState<{ category: string; priority: Priority } | null>(null)
 
   useEffect(() => {
-    if (state?.error) toast.error(state.error)
+    if (state?.error) toast.error(t(`errors.${state.error}`))
     else if (state?.fieldErrors) toast.error(t('newTicket.fixErrors'))
   }, [state, t])
 
@@ -131,7 +132,7 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: formData })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? t('newTicket.uploadFailed'))
+      if (!res.ok) throw new Error(data.error ? t(`errors.${data.error}`, data.params) : t('newTicket.uploadFailed'))
 
       const uploaded = await Promise.all(
         (data.attachments as Attachment[]).map(async (att, i) =>
@@ -210,7 +211,7 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
                   id="title"
                   name="title"
                   required
-                  maxLength={200}
+                  maxLength={TITLE_MAX}
                   value={title}
                   onChange={(e) => {
                     setTitle(e.target.value)
@@ -234,7 +235,7 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
                   name="description"
                   required
                   rows={6}
-                  maxLength={5000}
+                  maxLength={DESCRIPTION_MAX}
                   value={description}
                   onChange={(e) => {
                     setDescription(e.target.value)

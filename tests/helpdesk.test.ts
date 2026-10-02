@@ -51,7 +51,7 @@ import { NextRequest } from 'next/server'
 import { headers } from 'next/headers'
 import { getSession, createSession, decrypt, type Role, type SessionPayload } from '@/lib/session'
 import { AiNotConfiguredError, isAiConfigured, summarizeTicket, triageTicket, translateText } from '@/lib/gemini'
-import { login } from '@/app/actions/auth'
+import { login, register } from '@/app/actions/auth'
 import {
   createTicket,
   updateTicketStatus,
@@ -62,6 +62,7 @@ import {
   reassignTicket,
   addComment,
   getTicketDetails,
+  submitCsatRating,
 } from '@/app/actions/tickets'
 import { inviteUser, updateUserRole, updateUserStatus } from '@/app/actions/admin'
 import { changePassword } from '@/app/actions/account'
@@ -141,7 +142,7 @@ function form(fields: Record<string, string>) {
 // ─── Setup & Teardown ─────────────────────────────────
 const clearTestRateLimits = () =>
   prisma.rateLimit.deleteMany({
-    where: { OR: [{ key: { contains: String(stamp) } }, { key: { startsWith: 'login:address:203.0.113.' } }, { key: { contains: 'unknown-' } }] },
+    where: { OR: [{ key: { contains: String(stamp) } }, { key: { startsWith: 'login:address:203.0.113.' } }, { key: { startsWith: 'register:address:203.0.113.' } }, { key: { contains: 'unknown-' } }] },
   })
 
 beforeAll(async () => {
@@ -340,14 +341,14 @@ describe('Test 3: Role Authorization', () => {
   it('EMPLOYEE cannot change ticket status', async () => {
     signInAs(employeeId, 'EMPLOYEE')
     const result = await updateTicketStatus(ticketId, 'ASSIGNED')
-    expect(result.error).toMatch(/Only IT Support/)
+    expect(result).toEqual({ error: 'unauthorized' })
     expect(await statusOf(ticketId)).toBe('OPEN')
   })
 
   it('EMPLOYEE cannot assign or take over tickets', async () => {
     signInAs(employeeId, 'EMPLOYEE')
-    expect((await assignTicket(ticketId, itSupportId)).error).toMatch(/Unauthorized/)
-    expect((await takeOverTicket(ticketId)).error).toMatch(/Unauthorized/)
+    expect(await assignTicket(ticketId, itSupportId)).toEqual({ error: 'unauthorized' })
+    expect(await takeOverTicket(ticketId)).toEqual({ error: 'unauthorized' })
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
     expect(ticket?.assignedToId).toBeNull()
   })
@@ -361,7 +362,7 @@ describe('Test 3: Role Authorization', () => {
 
   it('IT_SUPPORT cannot use admin-only actions', async () => {
     signInAs(itSupportId, 'IT_SUPPORT')
-    expect((await reassignTicket(ticketId, itPeerId)).error).toMatch(/Only Admins/)
+    expect(await reassignTicket(ticketId, itPeerId)).toEqual({ error: 'unauthorized' })
     await expect(updateUserStatus(employeeId, 'SUSPENDED')).rejects.toThrow('NEXT_REDIRECT /tickets')
     const user = await prisma.user.findUnique({ where: { id: employeeId } })
     expect(user?.accountStatus).toBe('APPROVED')
@@ -379,7 +380,7 @@ describe('Test 3: Role Authorization', () => {
     const peerTicketId = await createTestTicket(employeeId, { status: 'ASSIGNED', assignedToId: itPeerId })
     signInAs(itSupportId, 'IT_SUPPORT')
     const result = await updateTicketStatus(peerTicketId, 'IN_PROGRESS')
-    expect(result.error).toMatch(/Read Only/)
+    expect(result).toEqual({ error: 'assigned_to_other', params: { name: 'Test IT Peer' } })
     expect(await statusOf(peerTicketId)).toBe('ASSIGNED')
   })
 })
@@ -400,7 +401,7 @@ describe('Test 4: Status Lifecycle State Machine', () => {
   }
 
   it.each(['IN_PROGRESS', 'RESOLVED', 'CLOSED'] as const)('rejects skipping from OPEN to %s', async (to) => {
-    expect((await moveTo(to)).error).toMatch(/Invalid status transition: OPEN/)
+    expect(await moveTo(to)).toEqual({ error: 'invalid_transition' })
     expect(await statusOf(ticketId)).toBe('OPEN')
   })
 
@@ -418,15 +419,15 @@ describe('Test 4: Status Lifecycle State Machine', () => {
   })
 
   it('rejects going backwards from RESOLVED', async () => {
-    expect((await moveTo('OPEN')).error).toMatch(/Invalid status transition: RESOLVED/)
-    expect((await moveTo('IN_PROGRESS')).error).toMatch(/Invalid status transition: RESOLVED/)
+    expect(await moveTo('OPEN')).toEqual({ error: 'invalid_transition' })
+    expect(await moveTo('IN_PROGRESS')).toEqual({ error: 'invalid_transition' })
     expect(await statusOf(ticketId)).toBe('RESOLVED')
   })
 
   it('RESOLVED → CLOSED, after which every transition is rejected', async () => {
     expect(await moveTo('CLOSED')).toEqual({})
     for (const to of ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED'] as const) {
-      expect((await moveTo(to)).error).toMatch(/terminal state/)
+      expect(await moveTo(to)).toEqual({ error: 'invalid_transition' })
     }
     expect(await statusOf(ticketId)).toBe('CLOSED')
   })
@@ -513,7 +514,7 @@ describe('Test 5: Data Isolation', () => {
   it("EMPLOYEE cannot comment on another employee's ticket", async () => {
     signInAs(employeeId, 'EMPLOYEE', 'Test Employee')
     const result = await addComment(otherTicketId, 'Let me in')
-    expect(result.error).toMatch(/Forbidden/)
+    expect(result).toEqual({ error: 'forbidden' })
     expect(await prisma.comment.count({ where: { ticketId: otherTicketId } })).toBe(0)
   })
 
@@ -810,22 +811,22 @@ describe('Test 9: Admin Settings', () => {
 
   it('only admins can change settings', async () => {
     signInAs(itSupportId, 'IT_SUPPORT')
-    expect(await updateSettings(valid)).toEqual({ error: 'Unauthorized' })
+    expect(await updateSettings(valid)).toEqual({ error: 'unauthorized' })
   })
 
   it.each([
-    ['an unknown priority', { defaultPriority: 'URGENT' }],
-    ['negative SLA hours', { slaHighHours: -5 }],
-    ['fractional SLA hours', { slaLowHours: 1.5 }],
-    ['a malformed time', { businessHoursStart: '9am' }],
-    ['hours that end before they start', { businessHoursStart: '18:00' }],
-    ['an invalid work day', { workDays: JSON.stringify(['Funday']) }],
-    ['no categories', { categoriesList: '[]' }],
-    ['a bad email', { supportEmail: 'not-an-email' }],
-  ] as const)('rejects %s', async (_label, change) => {
+    ['an unknown priority', { defaultPriority: 'URGENT' }, 'settings_default_priority'],
+    ['negative SLA hours', { slaHighHours: -5 }, 'settings_sla_hours'],
+    ['fractional SLA hours', { slaLowHours: 1.5 }, 'settings_sla_hours'],
+    ['a malformed time', { businessHoursStart: '9am' }, 'settings_time_format'],
+    ['hours that end before they start', { businessHoursStart: '18:00' }, 'settings_hours_order'],
+    ['an invalid work day', { workDays: JSON.stringify(['Funday']) }, 'settings_work_days'],
+    ['no categories', { categoriesList: '[]' }, 'settings_categories'],
+    ['a bad email', { supportEmail: 'not-an-email' }, 'settings_support_email'],
+    ['a domain without @', { autoApproveDomain: 'company.com' }, 'settings_domain'],
+  ] as const)('rejects %s', async (_label, change, error) => {
     signInAs(adminId, 'ADMIN')
-    const result = await updateSettings({ ...valid, ...change })
-    expect(result.error).toBeTruthy()
+    expect(await updateSettings({ ...valid, ...change })).toEqual({ error })
   })
 
   it('saves valid settings', async () => {
@@ -865,7 +866,7 @@ describe('Test 10: Invites & Passwords', () => {
     expect(user).toMatchObject({ name: 'New Starter', role: 'EMPLOYEE', accountStatus: 'INVITED' })
     expect(await bcrypt.compare(tempPassword, user.password)).toBe(true)
 
-    expect((await inviteUser({ name: 'Again', email: invitedEmail, role: 'EMPLOYEE' })).error).toMatch(/already exists/)
+    expect(await inviteUser({ name: 'Again', email: invitedEmail, role: 'EMPLOYEE' })).toEqual({ error: 'email_taken' })
   })
 
   it('signing in with the temporary password forces a password change', async () => {
@@ -1061,5 +1062,130 @@ describe('Test 12: Sign-in Rate Limiting', () => {
     // Other people are not affected
     fromAddress('203.0.113.14')
     await expect(login(undefined, form({ email: employeeEmail, password: PASSWORD }))).rejects.toThrow('NEXT_REDIRECT')
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 13: Server-side validation — nothing the browser sends is trusted
+// ────────────────────────────────────────────────────────
+describe('Test 13: Server-side Validation', () => {
+  const ticketForm = (fields: Record<string, string> = {}) =>
+    form({ title: 'Validation ticket', description: 'Checking what the server accepts.', category: 'Network', ...fields })
+  const created = (title: string) => prisma.ticket.findFirst({ where: { createdById: employeeId, title } })
+
+  it('a ticket needs one of the admin categories and a real priority', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    expect(await createTicket(undefined, ticketForm({ category: 'Made Up' }))).toEqual({ fieldErrors: { category: true } })
+    expect(await createTicket(undefined, ticketForm({ priority: 'URGENT' }))).toEqual({ error: 'invalid_priority' })
+    expect(await createTicket(undefined, ticketForm({ title: 'x'.repeat(201) }))).toEqual({ fieldErrors: { title: true } })
+    expect(await created('Validation ticket')).toBeNull()
+  })
+
+  it.each([
+    ['a link to another site', [{ name: 'a.html', size: 1, type: 'text/html', url: 'https://evil.test/a.html' }]],
+    ['a path outside the uploads folder', [{ name: 'env', size: 1, type: 'text/plain', url: '/uploads/../../.env' }]],
+    ['a file type that is not allowed', [{ name: 'a.svg', size: 1, type: 'image/png', url: '/uploads/123e4567-e89b-12d3-a456-426614174000.svg' }]],
+    ['more than 5 files', Array(6).fill({ name: 'a.png', size: 1, type: 'image/png', url: '/uploads/123e4567-e89b-12d3-a456-426614174000.png' })],
+    ['something that is not a list', 'not json'],
+  ])('rejects attachments with %s', async (_label, attachments) => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const json = typeof attachments === 'string' ? attachments : JSON.stringify(attachments)
+    expect(await createTicket(undefined, ticketForm({ attachmentsJson: json }))).toEqual({ error: 'invalid_attachments' })
+  })
+
+  it('stores uploaded attachments with the type taken from the file, not the browser', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const url = '/uploads/123e4567-e89b-12d3-a456-426614174000.png'
+    await expect(
+      createTicket(undefined, ticketForm({ title: 'With attachment', attachmentsJson: JSON.stringify([{ name: 'shot.png', size: 10, type: 'text/html', url }]) }))
+    ).rejects.toThrow('NEXT_REDIRECT')
+    expect(JSON.parse((await created('With attachment'))!.attachments)).toEqual([{ name: 'shot.png', size: 10, type: 'image/png', url }])
+  })
+
+  it('tickets created at the same moment still get different numbers', async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const results = await Promise.allSettled(
+      Array.from({ length: 6 }, (_, i) => createTicket(undefined, ticketForm({ title: `Concurrent ticket ${i}` }))),
+    )
+    expect(results.every((r) => r.status === 'rejected' && String(r.reason).includes('NEXT_REDIRECT /tickets?created=true'))).toBe(true)
+    const tickets = await prisma.ticket.findMany({ where: { createdById: employeeId, title: { startsWith: 'Concurrent ticket' } } })
+    expect(new Set(tickets.map((t) => t.ticketNumber)).size).toBe(6)
+  })
+
+  it('tickets can only be given to active IT support staff', async () => {
+    const ticketId = await createTestTicket(employeeId)
+    const suspendedAgent = await createUser('Suspended Agent', `test-suspended-agent-${stamp}@test.com`, 'IT_SUPPORT', 'SUSPENDED')
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect(await assignTicket(ticketId, employeeId)).toEqual({ error: 'invalid_assignee' })
+    expect(await assignTicket(ticketId, suspendedAgent)).toEqual({ error: 'invalid_assignee' })
+    signInAs(adminId, 'ADMIN')
+    expect(await reassignTicket(ticketId, adminId)).toEqual({ error: 'invalid_assignee' })
+    expect(await reassignTicket(ticketId, itPeerId)).toEqual({})
+  })
+
+  it('a closed ticket cannot be taken over or reassigned', async () => {
+    const ticketId = await createTestTicket(employeeId, { status: 'CLOSED', assignedToId: itPeerId })
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect(await takeOverTicket(ticketId)).toEqual({ error: 'ticket_closed' })
+    expect(await assignTicket(ticketId, itSupportId)).toEqual({ error: 'ticket_closed' })
+  })
+
+  it('when two agents claim the same ticket at once, only one wins', async () => {
+    const ticketId = await createTestTicket(employeeId)
+    vi.mocked(getSession)
+      .mockResolvedValueOnce({ userId: itSupportId, role: 'IT_SUPPORT', name: 'A' } as SessionPayload)
+      .mockResolvedValueOnce({ userId: itPeerId, role: 'IT_SUPPORT', name: 'B' } as SessionPayload)
+    const results = await Promise.all([updateTicketStatus(ticketId, 'ASSIGNED'), updateTicketStatus(ticketId, 'ASSIGNED')])
+
+    expect(results.filter((r) => !r.error)).toHaveLength(1)
+    expect(results.find((r) => r.error)?.error).toMatch(/^(stale|assigned_to_other|invalid_transition)$/)
+    expect(await prisma.ticketHistory.count({ where: { ticketId, event: 'status_changed' } })).toBe(1)
+  })
+
+  it('comments must exist, be non-empty and not too long, on a real ticket', async () => {
+    const ticketId = await createTestTicket(employeeId)
+    signInAs(employeeId, 'EMPLOYEE')
+    expect(await addComment(ticketId, '   ')).toEqual({ error: 'comment_empty' })
+    expect(await addComment(ticketId, 'x'.repeat(5001))).toEqual({ error: 'comment_too_long', params: { max: 5000 } })
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect(await addComment('no-such-ticket', 'Hello')).toEqual({ error: 'not_found' })
+  })
+
+  it('a ticket can be rated once, from 1 to 5, after it is resolved', async () => {
+    const openId = await createTestTicket(employeeId)
+    const resolvedId = await createTestTicket(employeeId, { status: 'RESOLVED', assignedToId: itSupportId })
+    signInAs(employeeId, 'EMPLOYEE')
+    expect(await submitCsatRating(openId, 5)).toEqual({ error: 'not_resolved' })
+    expect(await submitCsatRating(resolvedId, 4.5)).toEqual({ error: 'invalid_rating' })
+    expect(await submitCsatRating(resolvedId, 4, 'Quick fix')).toEqual({})
+    expect(await submitCsatRating(resolvedId, 1)).toEqual({ error: 'already_rated' })
+    expect((await prisma.ticket.findUnique({ where: { id: resolvedId } }))?.csatRating).toBe(4)
+  })
+
+  it('an admin cannot suspend or demote themselves', async () => {
+    signInAs(adminId, 'ADMIN')
+    expect(await updateUserStatus(adminId, 'SUSPENDED')).toEqual({ error: 'cannot_change_self' })
+    expect(await updateUserRole(adminId, 'EMPLOYEE')).toEqual({ error: 'cannot_change_self' })
+    expect((await prisma.user.findUnique({ where: { id: adminId } }))).toMatchObject({ role: 'ADMIN', accountStatus: 'APPROVED' })
+  })
+
+  it('the account request form does not reveal whether an email is registered', async () => {
+    vi.mocked(headers).mockResolvedValue(new Headers({ 'x-forwarded-for': '203.0.113.20' }) as never)
+    const request = (email: string) => register(undefined, form({ name: 'Someone', email, password: 'long-enough-1', role: 'EMPLOYEE' }))
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: employeeId } })
+
+    expect(await request(employeeEmail)).toEqual({ success: true })
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: employeeId } })).toEqual(before)
+  })
+
+  it('limits account requests from one address', async () => {
+    vi.mocked(headers).mockResolvedValue(new Headers({ 'x-forwarded-for': '203.0.113.21' }) as never)
+    for (let i = 0; i < 5; i++) {
+      const email = `test-register-${stamp}-${i}@test.com`
+      expect(await register(undefined, form({ name: 'Someone', email, password: 'long-enough-1', role: 'IT_SUPPORT' }))).toEqual({ success: true })
+      testUserIds.push((await prisma.user.findUniqueOrThrow({ where: { email } })).id)
+    }
+    const blocked = await register(undefined, form({ name: 'Someone', email: `test-register-${stamp}-x@test.com`, password: 'long-enough-1', role: 'IT_SUPPORT' }))
+    expect(blocked).toMatchObject({ error: 'too_many_attempts' })
   })
 })

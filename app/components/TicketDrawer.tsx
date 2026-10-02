@@ -120,7 +120,7 @@ export default function TicketDrawer({
       try {
         const result = await updateTicketStatus(ticket.id, nextStatus)
         if (result?.error) {
-          toast.error(result.error)
+          toast.error(t(`errors.${result.error}`, result.params))
           return
         }
         toast.success(locale === 'ar' ? `تم تحديث حالة التذكرة إلى ${getStatusLabel(nextStatus, locale)}` : `Ticket marked as ${nextStatus}`)
@@ -128,8 +128,8 @@ export default function TicketDrawer({
           confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
         }
         await refreshTicket(ticket.id)
-      } catch (err) {
-        toast.error((err instanceof Error && err.message) || (locale === 'ar' ? 'فشل تحديث الحالة' : 'Failed to update status'))
+      } catch {
+        toast.error(locale === 'ar' ? 'فشل تحديث الحالة' : 'Failed to update status')
       }
     })
   }
@@ -140,13 +140,13 @@ export default function TicketDrawer({
       try {
         const result = await takeOverTicket(ticket.id)
         if (result?.error) {
-          toast.error(result.error)
+          toast.error(t(`errors.${result.error}`, result.params))
           return
         }
         toast.success(locale === 'ar' ? 'لقد استلمت هذه التذكرة بنجاح.' : 'You have taken over this ticket.')
         await refreshTicket(ticket.id)
-      } catch (err) {
-        toast.error((err instanceof Error && err.message) || (locale === 'ar' ? 'فشل استلام التذكرة' : 'Failed to take over ticket'))
+      } catch {
+        toast.error(locale === 'ar' ? 'فشل استلام التذكرة' : 'Failed to take over ticket')
       }
     })
   }
@@ -159,14 +159,14 @@ export default function TicketDrawer({
       try {
         const result = await addComment(ticket.id, commentText)
         if (result?.error) {
-          toast.error(result.error)
+          toast.error(t(`errors.${result.error}`, result.params))
           return
         }
         toast.success(locale === 'ar' ? 'تمت إضافة التعليق بنجاح' : 'Comment added')
         setCommentText('')
         await refreshTicket(ticket.id)
-      } catch (err) {
-        toast.error((err instanceof Error && err.message) || (locale === 'ar' ? 'فشل إضافة التعليق' : 'Failed to add comment'))
+      } catch {
+        toast.error(locale === 'ar' ? 'فشل إضافة التعليق' : 'Failed to add comment')
       }
     })
   }

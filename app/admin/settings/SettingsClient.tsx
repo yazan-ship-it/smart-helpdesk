@@ -203,7 +203,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
       try {
         const result = await updateSettings(payload)
         if (result.error) {
-          toast.error(result.error)
+          toast.error(t(`errors.${result.error}`, result.params))
           return
         }
         
@@ -218,8 +218,8 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
         }
 
         toast.success(t('toasts.settingsUpdated'))
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to update settings')
+      } catch {
+        toast.error(t('errors.failed'))
       }
     })
   }

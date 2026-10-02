@@ -11,7 +11,7 @@ type Props = {
 }
 
 export default function AvailabilityToggle({ initialAvailability }: Props) {
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const [isAvailable, setIsAvailable] = useState(initialAvailability)
   const [isPending, startTransition] = useTransition()
 
@@ -19,7 +19,7 @@ export default function AvailabilityToggle({ initialAvailability }: Props) {
     startTransition(async () => {
       const result = await toggleAvailability()
       if (result.error) {
-        toast.error(result.error)
+        toast.error(t(`errors.${result.error}`, result.params))
         return
       }
       setIsAvailable(result.isAvailable)

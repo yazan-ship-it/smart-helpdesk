@@ -121,7 +121,7 @@ function InviteUserModal({ onClose }: { onClose: () => void }) {
     startTransition(async () => {
       const res = await inviteUser({ name, email, role })
       if (res.error) {
-        toast.error(res.error)
+        toast.error(t(`errors.${res.error}`, res.params))
       } else if (res.tempPassword) {
         setTempPassword(res.tempPassword)
         router.refresh()
@@ -217,7 +217,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
     startTransition(async () => {
       const res = await updateUserRole(user.id, role, role === 'IT_SUPPORT' ? skills : [])
       if (res.error) {
-        toast.error(res.error)
+        toast.error(t(`errors.${res.error}`, res.params))
       } else {
         toast.success(t('toasts.userUpdated'))
         router.refresh()
@@ -285,7 +285,7 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
   const handleStatusChange = (status: 'APPROVED' | 'REJECTED' | 'PENDING' | 'SUSPENDED') => {
     startStatusTransition(async () => {
       const result = await updateUserStatus(user.id, status)
-      if (result.error) toast.error(result.error)
+      if (result.error) toast.error(t(`errors.${result.error}`, result.params))
       else {
         toast.success(t('toasts.userStatusUpdated'))
         router.refresh()
@@ -455,7 +455,7 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
   const handleBulkAction = (action: 'APPROVED' | 'REJECTED') => {
     startBulkTransition(async () => {
       const res = await bulkUpdateUserStatus(Array.from(selectedIds), action)
-      if (res.error) toast.error(res.error)
+      if (res.error) toast.error(t(`errors.${res.error}`, res.params))
       else {
         toast.success(t('toasts.bulkUpdated', { count: selectedIds.size }))
         setSelectedIds(new Set())

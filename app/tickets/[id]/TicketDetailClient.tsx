@@ -174,7 +174,7 @@ export default function TicketDetailClient({
       try {
         const result = await takeOverTicket(ticket.id)
         if (result?.error) {
-          toast.error(result.error)
+          toast.error(t(`errors.${result.error}`, result.params))
         } else {
           toast.success(
             ticket.assignedTo ? t('toasts.takenOverFrom', { name: ticket.assignedTo.name }) : t('toasts.claimed')
@@ -205,7 +205,7 @@ export default function TicketDetailClient({
  try {
  const result = await addComment(ticket.id, commentText, isInternalNote)
  if (result?.error) {
- toast.error(result.error)
+ toast.error(t(`errors.${result.error}`, result.params))
  } else {
  setCommentText('')
  setIsInternalNote(false)
@@ -240,7 +240,7 @@ export default function TicketDetailClient({
  try {
  const result = await updateTicketStatus(ticket.id, newStatus)
  if (result?.error) {
- toast.error(result.error)
+ toast.error(t(`errors.${result.error}`, result.params))
  } else {
  toast.success(t('toasts.statusUpdatedTo', { status: getStatusLabel(newStatus, locale) }))
  router.refresh()
@@ -259,7 +259,7 @@ export default function TicketDetailClient({
  try {
  const result = await assignTicket(ticket.id, selectedAssignee)
  if (result?.error) {
- toast.error(result.error)
+ toast.error(t(`errors.${result.error}`, result.params))
  } else {
  const agent = itAgents.find((a) => a.id === selectedAssignee)
  toast.success(t('toasts.assignedTo', { name: agent?.name ?? '' }))
@@ -368,7 +368,7 @@ export default function TicketDetailClient({
          onClick={() => {
            startTransitionAction(async () => {
              const res = await confirmTicketResolution(ticket.id)
-             if (res.error) toast.error(res.error)
+             if (res.error) toast.error(t(`errors.${res.error}`, res.params))
              else { toast.success(t('toasts.ticketClosed')); router.refresh() }
            })
          }}
@@ -397,7 +397,7 @@ export default function TicketDetailClient({
          onClick={() => {
            startTransitionAction(async () => {
              const res = await reopenTicket(ticket.id, reopenReason)
-             if (res.error) toast.error(res.error)
+             if (res.error) toast.error(t(`errors.${res.error}`, res.params))
              else { toast.success(locale === 'ar' ? 'تم إعادة فتح التذكرة بنجاح' : 'Ticket reopened'); setShowReopenDialog(false); setReopenReason(''); router.refresh() }
            })
          }}
@@ -441,7 +441,7 @@ export default function TicketDetailClient({
            onClick={() => {
              startTransitionAction(async () => {
                const res = await submitCsatRating(ticket.id, csatRatingValue, csatFeedbackText)
-               if (res.error) toast.error(res.error)
+               if (res.error) toast.error(t(`errors.${res.error}`, res.params))
                else { toast.success(t('toasts.thanksFeedback')); router.refresh() }
              })
            }}

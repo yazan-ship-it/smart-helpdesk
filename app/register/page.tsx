@@ -25,15 +25,15 @@ import { useTranslation } from '@/lib/i18n'
 
 export default function RegisterPage() {
   const [state, action, pending] = useActionState<RegisterState, FormData>(register, undefined)
-  const { t, isRTL } = useTranslation()
+  const { t } = useTranslation()
   const [showPassword, setShowPassword] = useState(false)
   const [selectedRole, setSelectedRole] = useState<'EMPLOYEE' | 'IT_SUPPORT'>('EMPLOYEE')
 
   useEffect(() => {
     if (state?.fieldErrors && Object.keys(state.fieldErrors).length > 0) {
-      toast.error(isRTL ? 'يرجى تصحيح الأخطاء أدناه والمحاولة مرة أخرى.' : 'Please fix the errors below and try again.')
+      toast.error(t('auth.fixErrors'))
     }
-  }, [state, isRTL])
+  }, [state, t])
 
   // Success screen
   if (state?.success) {
@@ -164,7 +164,7 @@ export default function RegisterPage() {
             {state?.fieldErrors?.name && (
               <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {state.fieldErrors.name[0]}
+                {t('auth.registerErrors.name')}
               </p>
             )}
           </div>
@@ -189,7 +189,7 @@ export default function RegisterPage() {
             {state?.fieldErrors?.email && (
               <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {state.fieldErrors.email[0]}
+                {t('auth.registerErrors.email')}
               </p>
             )}
           </div>
@@ -226,7 +226,7 @@ export default function RegisterPage() {
             {state?.fieldErrors?.password && (
               <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {state.fieldErrors.password[0]}
+                {t('auth.registerErrors.password')}
               </p>
             )}
           </div>
@@ -272,7 +272,7 @@ export default function RegisterPage() {
             {state?.fieldErrors?.role && (
               <p className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {state.fieldErrors.role[0]}
+                {t('auth.registerErrors.role')}
               </p>
             )}
           </div>
@@ -281,7 +281,7 @@ export default function RegisterPage() {
           {state?.error && (
             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-500 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{state.error}</span>
+              <span>{t(`auth.errors.${state.error}`, { minutes: state.retryAfterMinutes ?? 0 })}</span>
             </div>
           )}
 

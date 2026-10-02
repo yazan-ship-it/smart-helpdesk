@@ -2,6 +2,8 @@ import 'server-only'
 import { randomInt } from 'crypto'
 
 export const MIN_PASSWORD_LENGTH = 8
+/** bcrypt ignores everything after 72 bytes */
+export const MAX_PASSWORD_LENGTH = 72
 
 // No 0/O, 1/l/I: the admin reads this out or pastes it into a message
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'

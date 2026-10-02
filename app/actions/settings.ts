@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { getAppSettings, parseCategories } from '@/lib/settings'
 import { sanitizeSkills } from '@/lib/skills'
 import { PRIORITIES, type Priority } from '@/lib/ai/triage'
+import { fail, type ActionResult, type ErrorCode } from '@/lib/errors'
 
 export type SettingsInput = {
   appName: string
@@ -45,32 +46,33 @@ function isStringArray(json: string, allowed?: string[]): boolean {
   }
 }
 
-/** Server-side check of everything the settings form sends; returns an error message or null. */
-function validateSettings(data: SettingsInput): string | null {
-  if (!data.appName?.trim()) return 'App name is required.'
-  if (!EMAIL.test(data.supportEmail ?? '')) return 'A valid support email is required.'
-  if (!PRIORITIES.includes(data.defaultPriority as Priority)) return 'Invalid default priority.'
+/** Server-side check of everything the settings form sends; returns an error code or null. */
+function validateSettings(data: SettingsInput): ErrorCode | null {
+  const appName = typeof data.appName === 'string' ? data.appName.trim() : ''
+  if (!appName || appName.length > 60) return 'settings_app_name'
+  if (!EMAIL.test(data.supportEmail ?? '')) return 'settings_support_email'
+  if (!PRIORITIES.includes(data.defaultPriority as Priority)) return 'settings_default_priority'
   const hours = [data.slaCriticalHours, data.slaHighHours, data.slaMediumHours, data.slaLowHours]
-  if (!hours.every((h) => Number.isInteger(h) && h >= 1 && h <= 720)) return 'SLA hours must be whole numbers between 1 and 720.'
-  if (!TIME.test(data.businessHoursStart) || !TIME.test(data.businessHoursEnd)) return 'Business hours must use the HH:MM format.'
-  if (data.businessHoursStart >= data.businessHoursEnd) return 'Business hours must end after they start.'
-  if (!isStringArray(data.workDays, DAYS)) return 'Select at least one valid working day.'
-  if (!isStringArray(data.categoriesList)) return 'Define at least one category.'
-  if (!data.autoApproveDomain?.startsWith('@')) return 'The auto-approve domain must start with "@".'
+  if (!hours.every((h) => Number.isInteger(h) && h >= 1 && h <= 720)) return 'settings_sla_hours'
+  if (!TIME.test(data.businessHoursStart) || !TIME.test(data.businessHoursEnd)) return 'settings_time_format'
+  if (data.businessHoursStart >= data.businessHoursEnd) return 'settings_hours_order'
+  if (!isStringArray(data.workDays, DAYS)) return 'settings_work_days'
+  if (!isStringArray(data.categoriesList)) return 'settings_categories'
+  if (!/^@[a-z0-9.-]+\.[a-z]{2,}$/i.test((data.autoApproveDomain ?? '').trim())) return 'settings_domain'
   try {
-    if (!Array.isArray(JSON.parse(data.cannedResponses))) return 'Invalid canned responses.'
+    if (!Array.isArray(JSON.parse(data.cannedResponses))) return 'settings_canned'
   } catch {
-    return 'Invalid canned responses.'
+    return 'settings_canned'
   }
   return null
 }
 
-export async function updateSettings(data: SettingsInput): Promise<{ error?: string }> {
+export async function updateSettings(data: SettingsInput): Promise<ActionResult> {
   const session = await getSession()
-  if (!session || session.role !== 'ADMIN') return { error: 'Unauthorized' }
+  if (!session || session.role !== 'ADMIN') return fail('unauthorized')
 
   const error = validateSettings(data)
-  if (error) return { error }
+  if (error) return fail(error)
 
   const fields = {
     appName: data.appName.trim(),
@@ -104,14 +106,12 @@ export async function updateSettings(data: SettingsInput): Promise<{ error?: str
   return {}
 }
 
-export async function updateAgentSkills(userId: string, skills: string[]) {
+export async function updateAgentSkills(userId: string, skills: string[]): Promise<ActionResult & { success: boolean }> {
   const session = await getSession()
-  if (!session || session.role !== 'ADMIN') {
-    throw new Error('Unauthorized')
-  }
+  if (!session || session.role !== 'ADMIN') return { success: false, error: 'unauthorized' }
 
   const agent = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (agent?.role !== 'IT_SUPPORT') return { success: false }
+  if (agent?.role !== 'IT_SUPPORT') return { success: false, error: 'invalid_role' }
 
   const categories = parseCategories((await getAppSettings())?.categoriesList)
   await prisma.user.update({

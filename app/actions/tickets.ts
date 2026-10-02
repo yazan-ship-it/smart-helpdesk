@@ -2,22 +2,26 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { getSession } from '@/lib/session'
 import { resolveAutoAssignment, type DispatchResult } from '@/lib/services/assignment'
 import { calculateBusinessHoursDeadline, statusChangeFields } from '@/lib/sla'
 import { historyData } from '@/lib/history'
+import { PRIORITIES, type Priority } from '@/lib/ai/triage'
+import { parseCategories } from '@/lib/settings'
+import { parseAttachments } from '@/lib/uploads'
+import { fail, type ActionResult, type ErrorCode } from '@/lib/errors'
+import { COMMENT_MAX, CSAT_FEEDBACK_MAX, DESCRIPTION_MAX, DESCRIPTION_MIN, TITLE_MAX, TITLE_MIN } from '@/lib/ticket-rules'
 
-export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+export type { Priority }
 export type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
 
+
 export type TicketState = {
-  error?: string
-  fieldErrors?: {
-    title?: string[]
-    description?: string[]
-    category?: string[]
-  }
+  error?: ErrorCode
+  /** The form shows newTicket.errors.<field> for each flagged field */
+  fieldErrors?: Partial<Record<'title' | 'description' | 'category', true>>
 } | undefined
 
 // Valid lifecycle transitions - enforces strict state machine
@@ -33,37 +37,43 @@ function isValidTransition(from: Status, to: Status): boolean {
   return VALID_TRANSITIONS[from]?.includes(to) ?? false
 }
 
+const isFinished = (status: string) => status === 'RESOLVED' || status === 'CLOSED'
+
+/** Only active IT support staff can be given tickets */
+async function findAssignee(userId: string) {
+  return prisma.user.findFirst({
+    where: { id: userId, role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
+    select: { id: true, name: true },
+  })
+}
+
+function isRetryableWriteConflict(err: unknown) {
+  return err instanceof Prisma.PrismaClientKnownRequestError && (err.code === 'P2002' || err.code === 'P2034')
+}
+
 export async function createTicket(prevState: TicketState, formData: FormData): Promise<TicketState> {
   const session = await getSession()
   if (!session) redirect('/login')
 
-  const title = (formData.get('title') as string)?.trim()
-  const description = (formData.get('description') as string)?.trim()
-  const category = (formData.get('category') as string)?.trim()
-  const priority = (formData.get('priority') as Priority) ?? 'MEDIUM'
-
-  const fieldErrors: NonNullable<TicketState>['fieldErrors'] = {}
-  if (!title || title.length < 5) fieldErrors.title = ['Title must be at least 5 characters.']
-  if (!description || description.length < 10) fieldErrors.description = ['Description must be at least 10 characters.']
-  if (!category) fieldErrors.category = ['Please select a category.']
-
-  if (Object.keys(fieldErrors).length > 0) {
-    return { fieldErrors }
-  }
+  const title = String(formData.get('title') ?? '').trim()
+  const description = String(formData.get('description') ?? '').trim()
+  const category = String(formData.get('category') ?? '').trim()
 
   const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
-  if (settings?.maintenanceMode && session.role !== 'ADMIN') {
-    return { error: 'System is in maintenance mode. Ticket creation is temporarily paused.' }
-  }
+  if (settings?.maintenanceMode && session.role !== 'ADMIN') return { error: 'maintenance' }
 
-  const attachments = (formData.get('attachmentsJson') as string) || '[]'
+  const fieldErrors: NonNullable<TicketState>['fieldErrors'] = {}
+  if (title.length < TITLE_MIN || title.length > TITLE_MAX) fieldErrors.title = true
+  if (description.length < DESCRIPTION_MIN || description.length > DESCRIPTION_MAX) fieldErrors.description = true
+  // Only the categories the admin defined (the form's list can be edited in the browser)
+  if (!parseCategories(settings?.categoriesList).includes(category)) fieldErrors.category = true
+  if (Object.keys(fieldErrors).length > 0) return { fieldErrors }
 
-  // Generate next ticket number
-  const lastTicket = await prisma.ticket.findFirst({
-    orderBy: { ticketNumber: 'desc' },
-    select: { ticketNumber: true },
-  })
-  const nextNumber = (lastTicket?.ticketNumber ?? 0) + 1
+  const priority = (formData.get('priority') as Priority | null) ?? 'MEDIUM'
+  if (!PRIORITIES.includes(priority)) return { error: 'invalid_priority' }
+
+  const attachments = parseAttachments(formData.get('attachmentsJson') as string | null)
+  if (!attachments) return { error: 'invalid_attachments' }
 
   // Skill-based auto-dispatch is an admin policy (Settings → auto-assignment), not the requester's choice
   let dispatch: DispatchResult = { assigned: false, assignedToId: null, status: 'OPEN' }
@@ -96,91 +106,89 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
     }
   )
 
-  const ticket = await prisma.ticket.create({
-    data: {
-      ticketNumber: nextNumber,
-      title,
-      description,
-      category,
-      priority,
-      status: dispatch.status,
-      assignedToId: dispatch.assigned ? dispatch.agentId : null,
-      attachments,
-      slaDeadline,
-      createdById: session.userId,
-    },
-  })
+  // The ticket and its audit entries are written together. Two tickets created at the
+  // same moment can pick the same number; the unique index rejects one, which retries.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const last = await tx.ticket.findFirst({ orderBy: { ticketNumber: 'desc' }, select: { ticketNumber: true } })
+        const ticketNumber = (last?.ticketNumber ?? 0) + 1
 
-  // Ticket creation audit entry
-  await prisma.ticketHistory.create({
-    data: {
-      ticketId: ticket.id,
-      userId: session.userId,
-      ...historyData({ type: 'created', number: nextNumber }, session.name),
-    },
-  })
+        const ticket = await tx.ticket.create({
+          data: {
+            ticketNumber,
+            title,
+            description,
+            category,
+            priority,
+            status: dispatch.status,
+            assignedToId: dispatch.assigned ? dispatch.agentId : null,
+            attachments: JSON.stringify(attachments),
+            slaDeadline,
+            createdById: session.userId,
+          },
+        })
 
-  // 3. Automatic Audit Trail Logging
-  if (dispatch.assigned) {
-    await prisma.ticketHistory.create({
-      data: {
-        ticketId: ticket.id,
-        userId: session.userId,
-        ...historyData({ type: 'auto_assigned', agent: dispatch.agentName, category }, session.name),
-      },
-    })
-  } else {
-    await prisma.ticketHistory.create({
-      data: {
-        ticketId: ticket.id,
-        userId: session.userId,
-        ...historyData({ type: 'queued_unassigned', category }, session.name),
-      },
-    })
+        await tx.ticketHistory.create({
+          data: { ticketId: ticket.id, userId: session.userId, ...historyData({ type: 'created', number: ticketNumber }, session.name) },
+        })
+        await tx.ticketHistory.create({
+          data: {
+            ticketId: ticket.id,
+            userId: session.userId,
+            ...historyData(
+              dispatch.assigned
+                ? { type: 'auto_assigned', agent: dispatch.agentName, category }
+                : { type: 'queued_unassigned', category },
+              session.name,
+            ),
+          },
+        })
+      })
+      break
+    } catch (err) {
+      if (attempt < 5 && isRetryableWriteConflict(err)) continue
+      throw err
+    }
   }
 
   revalidatePath('/tickets')
   redirect('/tickets?created=true')
 }
 
-export async function updateTicketStatus(ticketId: string, newStatus: Status): Promise<{ error?: string }> {
+export async function updateTicketStatus(ticketId: string, newStatus: Status): Promise<ActionResult> {
   const session = await getSession()
-  if (!session || session.role !== 'IT_SUPPORT') {
-    return { error: 'Unauthorized: Only IT Support can update ticket status.' }
-  }
+  if (!session || session.role !== 'IT_SUPPORT') return fail('unauthorized')
 
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
     include: { assignedTo: { select: { id: true, name: true } } },
   })
-  if (!ticket) return { error: 'Ticket not found.' }
+  if (!ticket) return fail('not_found')
 
   // 🔒 Peer Ticket Edit Lock:
   // Agents can only modify the lifecycle status of tickets strictly assigned to their own ID,
   // or unassigned tickets they explicitly claim.
   if (ticket.assignedToId && ticket.assignedToId !== session.userId) {
-    return {
-      error: `Assigned to ${ticket.assignedTo?.name || 'another specialist'} - Read Only. Take over ticket to modify status.`,
-    }
+    return fail('assigned_to_other', { name: ticket.assignedTo?.name ?? '' })
   }
 
   const currentStatus = ticket.status as Status
-
-  if (!isValidTransition(currentStatus, newStatus)) {
-    return {
-      error: `Invalid status transition: ${currentStatus} → ${newStatus}. Valid next statuses: ${(VALID_TRANSITIONS[currentStatus] || []).join(', ') || 'none (terminal state)'}.`,
-    }
-  }
+  if (!isValidTransition(currentStatus, newStatus)) return fail('invalid_transition')
 
   // If unassigned, auto-claim the ticket when changing status
-  const updateData: { status: Status; assignedToId?: string } = { status: newStatus }
   const claimed = !ticket.assignedToId
-  if (claimed) updateData.assignedToId = session.userId
 
-  await prisma.ticket.update({
-    where: { id: ticketId },
-    data: { ...updateData, ...statusChangeFields(ticket, newStatus) },
+  // Only applies if nobody changed the ticket since it was read (two agents clicking at once)
+  const { count } = await prisma.ticket.updateMany({
+    where: { id: ticketId, status: currentStatus, assignedToId: ticket.assignedToId },
+    data: {
+      status: newStatus,
+      ...(claimed ? { assignedToId: session.userId } : {}),
+      ...statusChangeFields(ticket, newStatus),
+    },
   })
+  if (count === 0) return fail('stale')
 
   await prisma.ticketHistory.create({
     data: {
@@ -195,21 +203,20 @@ export async function updateTicketStatus(ticketId: string, newStatus: Status): P
   return {}
 }
 
-export async function reassignTicket(ticketId: string, newAssigneeId: string): Promise<{ error?: string }> {
+export async function reassignTicket(ticketId: string, newAssigneeId: string): Promise<ActionResult> {
   const session = await getSession()
-  if (!session || session.role !== 'ADMIN') {
-    return { error: 'Unauthorized: Only Admins can reassign tickets.' }
-  }
+  if (!session || session.role !== 'ADMIN') return fail('unauthorized')
 
   const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
-  if (!ticket) return { error: 'Ticket not found.' }
+  if (!ticket) return fail('not_found')
+  if (isFinished(ticket.status)) return fail('ticket_closed')
 
-  const newAssignee = await prisma.user.findUnique({ where: { id: newAssigneeId } })
-  if (!newAssignee) return { error: 'Assignee not found.' }
+  const newAssignee = await findAssignee(newAssigneeId)
+  if (!newAssignee) return fail('invalid_assignee')
 
   await prisma.ticket.update({
     where: { id: ticketId },
-    data: { assignedToId: newAssigneeId, status: ticket.status === 'OPEN' ? 'ASSIGNED' : ticket.status },
+    data: { assignedToId: newAssignee.id, status: ticket.status === 'OPEN' ? 'ASSIGNED' : ticket.status },
   })
 
   await prisma.ticketHistory.create({
@@ -225,32 +232,26 @@ export async function reassignTicket(ticketId: string, newAssigneeId: string): P
   return {}
 }
 
-export async function takeOverTicket(ticketId: string): Promise<{ error?: string }> {
+export async function takeOverTicket(ticketId: string): Promise<ActionResult> {
   const session = await getSession()
-  if (!session || session.role !== 'IT_SUPPORT') {
-    return { error: 'Unauthorized: Only IT Support can take over tickets.' }
-  }
+  if (!session || session.role !== 'IT_SUPPORT') return fail('unauthorized')
 
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
     include: { assignedTo: { select: { id: true, name: true } } },
   })
-  if (!ticket) return { error: 'Ticket not found.' }
-
-  if (ticket.assignedToId === session.userId) {
-    return { error: 'This ticket is already assigned to you.' }
-  }
+  if (!ticket) return fail('not_found')
+  if (ticket.assignedToId === session.userId) return fail('already_yours')
+  if (isFinished(ticket.status)) return fail('ticket_closed')
 
   const previousAgentName = ticket.assignedTo?.name || 'Unassigned'
   const newStatus = ticket.status === 'OPEN' ? 'ASSIGNED' : (ticket.status as Status)
 
-  await prisma.ticket.update({
-    where: { id: ticketId },
-    data: {
-      assignedToId: session.userId,
-      status: newStatus,
-    },
+  const { count } = await prisma.ticket.updateMany({
+    where: { id: ticketId, status: ticket.status, assignedToId: ticket.assignedToId },
+    data: { assignedToId: session.userId, status: newStatus },
   })
+  if (count === 0) return fail('stale')
 
   await prisma.ticketHistory.create({
     data: {
@@ -265,27 +266,19 @@ export async function takeOverTicket(ticketId: string): Promise<{ error?: string
   return {}
 }
 
-export async function assignTicket(
-  ticketId: string,
-  assigneeId: string,
-): Promise<{ error?: string }> {
+export async function assignTicket(ticketId: string, assigneeId: string): Promise<ActionResult> {
   const session = await getSession()
-  if (!session || session.role !== 'IT_SUPPORT') {
-    return { error: 'Unauthorized: Only IT Support can assign tickets.' }
-  }
+  if (!session || session.role !== 'IT_SUPPORT') return fail('unauthorized')
 
   const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
-  if (!ticket) return { error: 'Ticket not found.' }
+  if (!ticket) return fail('not_found')
 
   const currentStatus = ticket.status as Status
-
   // Allow reassignment even on IN_PROGRESS tickets
-  if (currentStatus === 'RESOLVED' || currentStatus === 'CLOSED') {
-    return { error: `Cannot reassign a ticket in ${currentStatus} status.` }
-  }
+  if (isFinished(currentStatus)) return fail('ticket_closed')
 
-  const assignee = await prisma.user.findUnique({ where: { id: assigneeId } })
-  if (!assignee) return { error: 'Assignee not found.' }
+  const assignee = await findAssignee(assigneeId)
+  if (!assignee) return fail('invalid_assignee')
 
   const previousAgent = ticket.assignedToId
     ? await prisma.user.findUnique({
@@ -297,7 +290,7 @@ export async function assignTicket(
   await prisma.ticket.update({
     where: { id: ticketId },
     data: {
-      assignedToId: assigneeId,
+      assignedToId: assignee.id,
       status: currentStatus === 'OPEN' ? 'ASSIGNED' : currentStatus,
     },
   })
@@ -315,57 +308,27 @@ export async function assignTicket(
   return {}
 }
 
-export async function updateTicketPriority(ticketId: string, priority: Priority): Promise<{ error?: string }> {
-  const session = await getSession()
-  if (!session || session.role !== 'IT_SUPPORT') {
-    return { error: 'Unauthorized: Only IT Support can update ticket priority.' }
-  }
-
-  await prisma.ticket.update({
-    where: { id: ticketId },
-    data: { priority },
-  })
-
-  await prisma.ticketHistory.create({
-    data: {
-      ticketId,
-      userId: session.userId,
-      ...historyData({ type: 'priority_changed', to: priority }, session.name),
-    },
-  })
-
-  revalidatePath('/tickets')
-  revalidatePath(`/tickets/${ticketId}`)
-  return {}
-}
-
-export async function addComment(ticketId: string, content: string, isInternal: boolean = false): Promise<{ error?: string }> {
+export async function addComment(ticketId: string, content: string, isInternal: boolean = false): Promise<ActionResult> {
   const session = await getSession()
   if (!session) redirect('/login')
 
-  if (!content.trim()) return { error: 'Comment cannot be empty.' }
+  const text = typeof content === 'string' ? content.trim() : ''
+  if (!text) return fail('comment_empty')
+  if (text.length > COMMENT_MAX) return fail('comment_too_long', { max: COMMENT_MAX })
 
-  let finalIsInternal = isInternal
+  const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { createdById: true } })
+  if (!ticket) return fail('not_found')
 
-  // EMPLOYEE can only comment on tickets they created
-  if (session.role === 'EMPLOYEE') {
-    finalIsInternal = false
-    const ticket = await prisma.ticket.findUnique({
-      where: { id: ticketId },
-      select: { createdById: true },
-    })
-    if (!ticket) return { error: 'Ticket not found.' }
-    if (ticket.createdById !== session.userId) {
-      return { error: 'Forbidden: You can only comment on your own tickets.' }
-    }
-  }
+  // EMPLOYEE can only comment on tickets they created, and never internally
+  const employee = session.role === 'EMPLOYEE'
+  if (employee && ticket.createdById !== session.userId) return fail('forbidden')
 
   await prisma.comment.create({
     data: {
-      content: content.trim(),
+      content: text,
       ticketId,
       authorId: session.userId,
-      isInternal: finalIsInternal,
+      isInternal: !employee && isInternal === true,
     },
   })
 
@@ -385,10 +348,10 @@ export async function addComment(ticketId: string, content: string, isInternal: 
  * Toggle the current IT Support agent's availability status.
  * Returns the new availability value.
  */
-export async function toggleAvailability(): Promise<{ isAvailable: boolean; error?: string }> {
+export async function toggleAvailability(): Promise<ActionResult & { isAvailable: boolean }> {
   const session = await getSession()
   if (!session || session.role !== 'IT_SUPPORT') {
-    return { isAvailable: false, error: 'Unauthorized' }
+    return { isAvailable: false, error: 'unauthorized' }
   }
 
   const user = await prisma.user.findUnique({
@@ -396,7 +359,7 @@ export async function toggleAvailability(): Promise<{ isAvailable: boolean; erro
     select: { isAvailable: true },
   })
 
-  if (!user) return { isAvailable: false, error: 'User not found.' }
+  if (!user) return { isAvailable: false, error: 'not_found' }
 
   const newValue = !user.isAvailable
 
@@ -427,7 +390,7 @@ export async function getMyAvailability(): Promise<{ isAvailable: boolean }> {
 export async function getTicketDetails(id: string) {
   const session = await getSession()
   if (!session) throw new Error('Unauthorized')
-  
+
   const ticket = await prisma.ticket.findUnique({
     where: { id },
     include: {
@@ -453,19 +416,16 @@ export async function getTicketDetails(id: string) {
   return ticket
 }
 
-export async function confirmTicketResolution(ticketId: string): Promise<{ error?: string }> {
+export async function confirmTicketResolution(ticketId: string): Promise<ActionResult> {
   const session = await getSession()
-  if (!session) return { error: 'Unauthorized' }
-  
+  if (!session) return fail('unauthorized')
+
   const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
-  if (!ticket) return { error: 'Ticket not found' }
-  
-  if (session.userId !== ticket.createdById) {
-    return { error: 'Forbidden: Only the ticket requester can confirm resolution.' }
-  }
-  if (ticket.status !== 'RESOLVED') {
-    return { error: 'Ticket must be in RESOLVED state to confirm.' }
-  }
+  if (!ticket) return fail('not_found')
+
+  // Only the ticket requester can confirm resolution
+  if (session.userId !== ticket.createdById) return fail('forbidden')
+  if (ticket.status !== 'RESOLVED') return fail('not_resolved')
 
   await prisma.ticket.update({
     where: { id: ticketId },
@@ -488,22 +448,20 @@ export async function confirmTicketResolution(ticketId: string): Promise<{ error
   return {}
 }
 
-export async function reopenTicket(ticketId: string, reason: string): Promise<{ error?: string }> {
+export async function reopenTicket(ticketId: string, reason: string): Promise<ActionResult> {
   const session = await getSession()
-  if (!session) return { error: 'Unauthorized' }
+  if (!session) return fail('unauthorized')
 
   const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
-  if (!ticket) return { error: 'Ticket not found' }
-  
-  if (session.userId !== ticket.createdById) {
-    return { error: 'Forbidden: Only the ticket requester can reopen it.' }
-  }
-  if (ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED') {
-    return { error: 'Only RESOLVED or CLOSED tickets can be reopened.' }
-  }
-  if (!reason || reason.trim().length < 5) {
-    return { error: 'A valid reason (min 5 chars) is required to reopen.' }
-  }
+  if (!ticket) return fail('not_found')
+
+  // Only the ticket requester can reopen it
+  if (session.userId !== ticket.createdById) return fail('forbidden')
+  if (!isFinished(ticket.status)) return fail('invalid_transition')
+
+  const text = typeof reason === 'string' ? reason.trim() : ''
+  if (text.length < 5) return fail('reason_required')
+  if (text.length > COMMENT_MAX) return fail('comment_too_long', { max: COMMENT_MAX })
 
   const newStatus = ticket.assignedToId ? 'IN_PROGRESS' : 'OPEN'
 
@@ -519,7 +477,7 @@ export async function reopenTicket(ticketId: string, reason: string): Promise<{ 
     data: {
       ticketId,
       userId: session.userId,
-      ...historyData({ type: 'reopened', reason: reason.trim() }, session.name),
+      ...historyData({ type: 'reopened', reason: text }, session.name),
     }
   })
 
@@ -528,26 +486,27 @@ export async function reopenTicket(ticketId: string, reason: string): Promise<{ 
   return {}
 }
 
-export async function submitCsatRating(ticketId: string, rating: number, feedback: string = ''): Promise<{ error?: string }> {
+export async function submitCsatRating(ticketId: string, rating: number, feedback: string = ''): Promise<ActionResult> {
   const session = await getSession()
-  if (!session) return { error: 'Unauthorized' }
+  if (!session) return fail('unauthorized')
 
-  if (rating < 1 || rating > 5) {
-    return { error: 'Rating must be between 1 and 5 stars.' }
-  }
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return fail('invalid_rating')
+  const text = typeof feedback === 'string' ? feedback.trim() : ''
+  if (text.length > CSAT_FEEDBACK_MAX) return fail('comment_too_long', { max: CSAT_FEEDBACK_MAX })
 
   const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
-  if (!ticket) return { error: 'Ticket not found' }
-  
-  if (session.userId !== ticket.createdById) {
-    return { error: 'Forbidden: Only the ticket requester can submit a CSAT rating.' }
-  }
+  if (!ticket) return fail('not_found')
+
+  // Only the requester rates, once, after the work is done
+  if (session.userId !== ticket.createdById) return fail('forbidden')
+  if (!isFinished(ticket.status)) return fail('not_resolved')
+  if (ticket.csatRating !== null) return fail('already_rated')
 
   await prisma.ticket.update({
     where: { id: ticketId },
     data: {
       csatRating: rating,
-      csatFeedback: feedback.trim()
+      csatFeedback: text,
     }
   })
 
@@ -562,4 +521,3 @@ export async function submitCsatRating(ticketId: string, rating: number, feedbac
   revalidatePath(`/tickets/${ticketId}`)
   return {}
 }
-

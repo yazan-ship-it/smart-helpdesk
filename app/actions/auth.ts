@@ -4,7 +4,16 @@ import bcrypt from 'bcryptjs'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { createSession, deleteSession, getSession, type Role } from '@/lib/session'
-import { clearAttempts, clientAddress, LOGIN_PER_ACCOUNT, LOGIN_PER_ADDRESS, recordAttempt, retryAfter } from '@/lib/rate-limit'
+import {
+  clearAttempts,
+  clientAddress,
+  LOGIN_PER_ACCOUNT,
+  LOGIN_PER_ADDRESS,
+  recordAttempt,
+  REGISTER_PER_ADDRESS,
+  retryAfter,
+} from '@/lib/rate-limit'
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@/lib/passwords'
 
 /** Error codes; the login page shows them in the user's language */
 export type LoginError =
@@ -23,13 +32,10 @@ export type AuthState = {
 } | undefined
 
 export type RegisterState = {
-  error?: string
-  fieldErrors?: {
-    name?: string[]
-    email?: string[]
-    password?: string[]
-    role?: string[]
-  }
+  error?: 'too_many_attempts'
+  retryAfterMinutes?: number
+  /** The form shows auth.registerErrors.<field> for each flagged field */
+  fieldErrors?: Partial<Record<'name' | 'email' | 'password' | 'role', true>>
   success?: boolean
 } | undefined
 
@@ -82,27 +88,32 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
 
 // ─── Register ─────────────────────────────────────────────────────────────────
 export async function register(prevState: RegisterState, formData: FormData): Promise<RegisterState> {
-  const name = (formData.get('name') as string)?.trim()
-  const email = (formData.get('email') as string)?.trim().toLowerCase()
-  const password = formData.get('password') as string
-  const role = (formData.get('role') as string)?.trim()
+  const name = String(formData.get('name') ?? '').trim()
+  const email = String(formData.get('email') ?? '').trim().toLowerCase()
+  const password = String(formData.get('password') ?? '')
+  const role = String(formData.get('role') ?? '').trim()
 
   const fieldErrors: NonNullable<RegisterState>['fieldErrors'] = {}
 
-  if (!name || name.length < 2) fieldErrors.name = ['Full name must be at least 2 characters.']
-  if (!email || !email.includes('@')) fieldErrors.email = ['A valid email address is required.']
-  if (!password || password.length < 8) fieldErrors.password = ['Password must be at least 8 characters.']
-  if (!role || !['EMPLOYEE', 'IT_SUPPORT'].includes(role)) fieldErrors.role = ['Please select a valid role.']
+  if (name.length < 2 || name.length > 100) fieldErrors.name = true
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) fieldErrors.email = true
+  if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) fieldErrors.password = true
+  if (!['EMPLOYEE', 'IT_SUPPORT'].includes(role)) fieldErrors.role = true
 
   if (Object.keys(fieldErrors).length > 0) {
     return { fieldErrors }
   }
 
-  // Check for duplicate email
+  // Slow down scripted sign-ups
+  const addressKey = `register:address:${await clientAddress()}`
+  const wait = await retryAfter(addressKey, REGISTER_PER_ADDRESS)
+  if (wait > 0) return { error: 'too_many_attempts', retryAfterMinutes: Math.ceil(wait / 60_000) }
+  await recordAttempt(addressKey, REGISTER_PER_ADDRESS)
+
+  // An existing email gets the same answer as a new one, so the form can't be used
+  // to find out who has an account (the login form gives nothing away either)
   const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) {
-    return { fieldErrors: { email: ['An account with this email already exists.'] } }
-  }
+  if (existing) return { success: true }
 
   const hashedPassword = await bcrypt.hash(password, 12)
 

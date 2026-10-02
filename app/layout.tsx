@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { ThemeProvider } from "@/app/components/ThemeProvider";
 import { cookies, headers } from "next/headers";
 import { LanguageProvider, type Locale } from "@/lib/i18n";
+import { getAppSettings } from "@/lib/settings";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -22,13 +23,13 @@ const cairo = Cairo({
   weight: ["400", "500", "600", "700", "800"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "Smart IT Helpdesk",
-    template: "%s | Smart IT Helpdesk",
-  },
-  description: "Manage and resolve IT support tickets efficiently with AI-powered triage.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const appName = (await getAppSettings())?.appName?.trim() || "Smart Helpdesk";
+  return {
+    title: { default: appName, template: `%s | ${appName}` },
+    description: "Manage and resolve IT support tickets efficiently with AI-powered triage.",
+  };
+}
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // Resolve the locale on the server (cookie first, then browser language) so the

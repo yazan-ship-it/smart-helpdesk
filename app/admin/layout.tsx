@@ -7,6 +7,10 @@ import UserDropdown from '@/app/components/UserDropdown'
 import SidebarNav from '@/app/components/SidebarNav'
 import { getRoleLabel } from '@/lib/roles'
 import { prisma } from '@/lib/db'
+import { getBrandName } from '@/lib/brand'
+import { isAiConfigured } from '@/lib/gemini'
+import { checkDatabase } from '@/lib/health'
+import { getAppSettings } from '@/lib/settings'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession()
@@ -16,6 +20,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!session || session.role !== 'ADMIN') {
     redirect('/login')
   }
+
+  const settings = await getAppSettings()
+  const brandName = getBrandName(settings?.appName, locale)
+
+  // Real health checks: time a trivial query, and report the AI configuration as it is
+  const { ok: dbOk, latencyMs: dbLatencyMs } = await checkDatabase()
+  const aiState = !isAiConfigured() ? 'missing' : settings && !settings.enableAiTriage ? 'disabled' : 'configured'
 
   const pendingApprovals = await prisma.user.findMany({
     where: { accountStatus: 'PENDING' },
@@ -52,7 +63,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <LifeBuoy className="w-7 h-7 text-indigo-500 shrink-0" />
           <div className="min-w-0 shrink-0 whitespace-nowrap">
             <p className="text-base font-extrabold tracking-tight text-foreground truncate whitespace-nowrap">
-              {locale === 'ar' ? 'المكتب الذكي للدعم الفني' : 'Smart Helpdesk'}
+              {brandName}
             </p>
             <p className="text-[10px] text-muted-foreground truncate whitespace-nowrap">
               {locale === 'ar' ? 'لوحة تحكم المدير' : 'Admin Console'}
@@ -72,24 +83,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div className="px-3 pb-3">
           <div className="bg-muted/40 dark:bg-muted/20 rounded-xl p-3 border border-border text-xs space-y-2">
             <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-              </span>
+              <Database className={`w-3.5 h-3.5 shrink-0 ${dbOk ? 'text-emerald-500' : 'text-red-500'}`} />
               <span className="text-muted-foreground font-medium">
-                {locale === 'ar' ? 'النظام يعمل بكفاءة' : 'System Operational'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span className="text-muted-foreground font-medium">
-                {locale === 'ar' ? 'مساعد Gemini الذكي: نشط' : 'Gemini AI Copilot: Active'}
+                {dbOk
+                  ? locale === 'ar' ? `قاعدة البيانات: متصلة (${dbLatencyMs} ms)` : `Database: connected (${dbLatencyMs} ms)`
+                  : locale === 'ar' ? 'قاعدة البيانات: لا يوجد اتصال' : 'Database: unreachable'}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <Database className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <Zap className={`w-3.5 h-3.5 shrink-0 ${aiState === 'configured' ? 'text-amber-500' : 'text-muted-foreground'}`} />
               <span className="text-muted-foreground font-medium">
-                {locale === 'ar' ? 'محرك قاعدة البيانات: الاستجابة 1ms' : 'SQLite Engine: Latency 1ms'}
+                {aiState === 'configured'
+                  ? locale === 'ar' ? 'الذكاء الاصطناعي: مفعّل' : 'AI: configured'
+                  : aiState === 'disabled'
+                    ? locale === 'ar' ? 'الذكاء الاصطناعي: معطّل من الإعدادات' : 'AI: turned off in Settings'
+                    : locale === 'ar' ? 'الذكاء الاصطناعي: لا يوجد مفتاح API' : 'AI: no API key set'}
               </span>
             </div>
           </div>

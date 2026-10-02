@@ -3,6 +3,8 @@ import { Ticket, Plus, User, FolderX, AlertTriangle, Monitor, Code, Wifi, Mail, 
 import { getSession } from '@/lib/session'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/db'
+import { getBrandName } from '@/lib/brand'
+import { getAppSettings } from '@/lib/settings'
 import UserDropdown from '@/app/components/UserDropdown'
 import AvailabilityToggle from '@/app/components/AvailabilityToggle'
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'
@@ -15,6 +17,7 @@ export default async function TicketsLayout({
   const session = await getSession()
   const cookieStore = await cookies()
   const locale = (cookieStore.get('helpdesk-lang')?.value === 'ar' ? 'ar' : 'en') as 'en' | 'ar'
+  const brandName = getBrandName((await getAppSettings())?.appName, locale)
 
   // Fetch counts
   const userId = session?.userId
@@ -65,7 +68,7 @@ export default async function TicketsLayout({
               <LifeBuoy className="w-8 h-8 text-[var(--brand)] shrink-0" />
               <div className="shrink-0 whitespace-nowrap">
                 <p className="text-xl md:text-2xl font-extrabold tracking-tight whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
-                  {locale === 'ar' ? 'المكتب الذكي للدعم الفني' : 'Smart Helpdesk'}
+                  {brandName}
                 </p>
                 <p className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
                   {locale === 'ar' ? 'بوابة الموظف' : 'Employee Portal'}
@@ -112,7 +115,7 @@ export default async function TicketsLayout({
             <LifeBuoy className="w-8 h-8 text-[var(--brand)] shrink-0" />
             <div className="shrink-0 whitespace-nowrap">
               <p className="text-base font-extrabold tracking-tight whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
-                {locale === 'ar' ? 'المكتب الذكي للدعم الفني' : 'Smart Helpdesk'}
+                {brandName}
               </p>
               <p className="text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
                 {locale === 'ar' ? 'منصة الدعم الفني' : 'IT Support Platform'}

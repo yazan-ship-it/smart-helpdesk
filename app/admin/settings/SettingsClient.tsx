@@ -67,8 +67,6 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
     supportEmail: initialSettings?.supportEmail ?? 'support@company.com',
     defaultPriority: initialSettings?.defaultPriority ?? 'MEDIUM',
     autoAssignmentEnabled: initialSettings?.autoAssignmentEnabled ?? true,
-    notifyNewUser: initialSettings?.notifyNewUser ?? true,
-    notifyCriticalTicket: initialSettings?.notifyCriticalTicket ?? true,
     
     slaCriticalHours: initialSettings?.slaCriticalHours ?? 4,
     slaHighHours: initialSettings?.slaHighHours ?? 24,
@@ -80,7 +78,6 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
     pauseSlaOnWeekends: initialSettings?.pauseSlaOnWeekends ?? true,
     
     enableAiTriage: initialSettings?.enableAiTriage ?? true,
-    aiConfidenceThreshold: initialSettings?.aiConfidenceThreshold ?? 70,
     fallbackHeuristicsEnabled: initialSettings?.fallbackHeuristicsEnabled ?? true,
     
     autoApproveDomain: initialSettings?.autoApproveDomain ?? '@company.com',
@@ -204,7 +201,11 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
 
     startTransition(async () => {
       try {
-        await updateSettings(payload)
+        const result = await updateSettings(payload)
+        if (result.error) {
+          toast.error(result.error)
+          return
+        }
         
         // Save agent skills
         for (const agent of localAgents) {
@@ -515,20 +516,6 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                   <input type="checkbox" name="enableAiTriage" checked={formData.enableAiTriage} onChange={handleChange} className="sr-only peer" />
                   <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                 </label>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-foreground">{locale === 'ar' ? `نسبة الثقة المطلوبة للذكاء الاصطناعي (${formData.aiConfidenceThreshold}%)` : `AI Confidence Threshold (${formData.aiConfidenceThreshold}%)`}</label>
-                <input
-                  type="range"
-                  name="aiConfidenceThreshold"
-                  min="0"
-                  max="100"
-                  value={formData.aiConfidenceThreshold}
-                  onChange={handleChange}
-                  className="w-full accent-primary"
-                />
-                <p className="text-xs text-muted-foreground">{locale === 'ar' ? 'الحد الأدنى لدرجة الثقة للتصنيف التلقائي دون مراجعة بشرية.' : 'Minimum confidence required for AI to auto-categorize without human review.'}</p>
               </div>
 
               <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-xl">

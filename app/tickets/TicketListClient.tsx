@@ -189,6 +189,14 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
   const { t, locale } = useTranslation()
   const searchParams = useSearchParams()
   const router = useRouter()
+
+  // Keep the queue current: re-fetch the server data every 30s while the tab is visible
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') router.refresh()
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [router])
   const pathname = usePathname()
   
   useEffect(() => {
@@ -374,7 +382,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  }}
  >
  <span className="w-1.5 h-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950 animate-pulse" />
- {locale === 'ar' ? 'بث مباشر' : 'Live Feed'}
+ {locale === 'ar' ? 'تحديث تلقائي' : 'Auto-refresh'}
  </span>
  {stats.critical > 0 && (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800/50">

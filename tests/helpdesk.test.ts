@@ -54,6 +54,7 @@ import {
 } from '@/app/actions/tickets'
 import { updateUserRole, updateUserStatus } from '@/app/actions/admin'
 import { translateAction } from '@/app/actions/translate'
+import { updateSettings, type SettingsInput } from '@/app/actions/settings'
 import TicketsPage from '@/app/tickets/page'
 import TicketDetailPage from '@/app/tickets/[id]/page'
 import AdminTicketsPage from '@/app/admin/tickets/page'
@@ -744,5 +745,69 @@ describe('Test 8: SLA Tracking', () => {
     expect(pending.props.initialStatus).toBe('PENDING')
     const junk = (await AdminUsersPage({ searchParams: Promise.resolve({ status: 'HACKED' }) })) as ReactElement<Props>
     expect(junk.props.initialStatus).toBe('')
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 9: Admin Settings — validated on the server
+// ────────────────────────────────────────────────────────
+describe('Test 9: Admin Settings', () => {
+  let original: Awaited<ReturnType<typeof prisma.appSettings.findUnique>>
+  const valid: SettingsInput = {
+    appName: 'Acme IT Desk',
+    supportEmail: 'it@acme.test',
+    defaultPriority: 'MEDIUM',
+    autoAssignmentEnabled: true,
+    slaCriticalHours: 4,
+    slaHighHours: 24,
+    slaMediumHours: 48,
+    slaLowHours: 72,
+    businessHoursStart: '09:00',
+    businessHoursEnd: '17:00',
+    workDays: JSON.stringify(['Sunday', 'Monday']),
+    pauseSlaOnWeekends: true,
+    enableAiTriage: true,
+    fallbackHeuristicsEnabled: true,
+    autoApproveDomain: '@acme.test',
+    maintenanceMode: false,
+    categoriesList: JSON.stringify(['Hardware', 'Other']),
+    cannedResponses: '[]',
+  }
+
+  beforeAll(async () => {
+    original = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
+  })
+  afterAll(async () => {
+    if (original) {
+      const { id, updatedAt, ...data } = original
+      await prisma.appSettings.update({ where: { id: 'singleton' }, data })
+    }
+  })
+
+  it('only admins can change settings', async () => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect(await updateSettings(valid)).toEqual({ error: 'Unauthorized' })
+  })
+
+  it.each([
+    ['an unknown priority', { defaultPriority: 'URGENT' }],
+    ['negative SLA hours', { slaHighHours: -5 }],
+    ['fractional SLA hours', { slaLowHours: 1.5 }],
+    ['a malformed time', { businessHoursStart: '9am' }],
+    ['hours that end before they start', { businessHoursStart: '18:00' }],
+    ['an invalid work day', { workDays: JSON.stringify(['Funday']) }],
+    ['no categories', { categoriesList: '[]' }],
+    ['a bad email', { supportEmail: 'not-an-email' }],
+  ] as const)('rejects %s', async (_label, change) => {
+    signInAs(adminId, 'ADMIN')
+    const result = await updateSettings({ ...valid, ...change })
+    expect(result.error).toBeTruthy()
+  })
+
+  it('saves valid settings', async () => {
+    signInAs(adminId, 'ADMIN')
+    expect(await updateSettings(valid)).toEqual({})
+    const saved = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
+    expect(saved).toMatchObject({ appName: 'Acme IT Desk', supportEmail: 'it@acme.test', slaHighHours: 24 })
   })
 })

@@ -12,7 +12,8 @@ export type HistoryEvent =
   | { type: 'status_changed'; from: string; to: string; claimed?: boolean }
   | { type: 'assigned'; agent: string; from?: string }
   | { type: 'reassigned_by_admin'; agent: string }
-  | { type: 'taken_over'; from: string }
+  /** No `from`: the ticket was unassigned and has been claimed */
+  | { type: 'taken_over'; from?: string }
   | { type: 'priority_changed'; to: string }
   | { type: 'comment_added' }
   | { type: 'resolution_confirmed' }
@@ -34,7 +35,7 @@ function englishSentence(e: HistoryEvent, actor: string): string {
     case 'reassigned_by_admin':
       return `Ticket reassigned to ${e.agent} by Admin`
     case 'taken_over':
-      return `Ticket taken over by ${actor} (reassigned from ${e.from})`
+      return e.from ? `Ticket taken over by ${actor} (reassigned from ${e.from})` : `Ticket claimed by ${actor}`
     case 'priority_changed':
       return `Priority updated to ${e.to}`
     case 'comment_added':
@@ -96,7 +97,10 @@ export function describeHistory(
     case 'reassigned_by_admin':
       return t('history.reassigned_by_admin', { agent: e.agent })
     case 'taken_over':
-      return t('history.taken_over', { actor, from: e.from })
+      // Older rows stored the literal "Unassigned" for a claim
+      return e.from && e.from !== 'Unassigned'
+        ? t('history.taken_over', { actor, from: e.from })
+        : t('history.claimed', { actor })
     case 'priority_changed':
       return t('history.priority_changed', { to: labels.priority(e.to) })
     case 'comment_added':

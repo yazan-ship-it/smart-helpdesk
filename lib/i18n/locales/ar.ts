@@ -450,6 +450,7 @@ export const ar: TranslationDictionary = {
     reassigned: 'أعيد الإسناد من {from} إلى {agent} بواسطة {actor}',
     reassigned_by_admin: 'أعيد الإسناد إلى {agent} بواسطة المدير',
     taken_over: 'استلم {actor} التذكرة من {from}',
+    claimed: 'استلم {actor} التذكرة',
     priority_changed: 'تغيرت الأولوية إلى {to}',
     comment_added: 'أضاف {actor} تعليقاً',
     resolution_confirmed: 'أكد مقدم الطلب الحل؛ تم إغلاق التذكرة',
@@ -458,6 +459,7 @@ export const ar: TranslationDictionary = {
   },
   // Misc UI labels
   ui: {
+    thisIsYou: 'هذا حسابك',
     openMenu: 'فتح القائمة',
     closeMenu: 'إغلاق القائمة',
     showingUsers: 'عرض {shown} من {total} مستخدم',

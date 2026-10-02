@@ -28,3 +28,19 @@ export function parseCategories(categoriesList: string | null | undefined): stri
   }
   return DEFAULT_CATEGORIES
 }
+
+export type CannedResponse = { id: string; title: string; content: string }
+
+/** The admin's canned replies (Settings); anything malformed is skipped. */
+export function parseCannedResponses(json: string | null | undefined): CannedResponse[] {
+  try {
+    const parsed: unknown = json ? JSON.parse(json) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (r): r is CannedResponse =>
+        typeof r === 'object' && r !== null && typeof r.id === 'string' && typeof r.title === 'string' && typeof r.content === 'string',
+    )
+  } catch {
+    return []
+  }
+}

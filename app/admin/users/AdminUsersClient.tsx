@@ -56,6 +56,8 @@ type Props = {
   categories: string[]
   /** Account-status filter from the URL (?status=PENDING from the sidebar) */
   initialStatus?: string
+  /** The signed-in admin, who can't change their own role or status */
+  currentUserId: string
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -274,7 +276,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
 }
 
 // ── User Row ─────────────────────────────────────────────────────────────────
-function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow; categories: string[]; selected: boolean; onToggle: () => void }) {
+function UserTableRow({ user, categories, selected, onToggle, isSelf }: { user: UserRow; categories: string[]; selected: boolean; onToggle: () => void; isSelf: boolean }) {
   const { t, locale } = useTranslation()
   const router = useRouter()
   const [isPendingStatus, startStatusTransition] = useTransition()
@@ -347,7 +349,7 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
             {skills.length > 2 && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-medium">+{skills.length - 2}</span>}
           </div>
         ) : (
-          <span className="text-[11px] text-muted-foreground italic">N/A</span>
+          <span className="text-[11px] text-muted-foreground">—</span>
         )}
       </td>
 
@@ -367,6 +369,9 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
 
       {/* Actions */}
       <td className="px-4 py-3">
+        {isSelf ? (
+          <span className="text-[11px] text-muted-foreground italic">{t('ui.thisIsYou')}</span>
+        ) : (
         <div className="flex items-center gap-2">
           {user.accountStatus === 'PENDING' && (
             <>
@@ -379,7 +384,8 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
             </>
           )}
 
-          {user.accountStatus === 'APPROVED' && (
+          {/* Suspending an invited account also cancels the invite */}
+          {(user.accountStatus === 'APPROVED' || user.accountStatus === 'INVITED') && (
             <button onClick={() => handleStatusChange('SUSPENDED')} disabled={isPendingStatus} className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-500/10 transition-colors" title={t('ui.suspend')}>
               {isPendingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
             </button>
@@ -395,6 +401,7 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
             <Edit2 className="w-4 h-4" />
           </button>
         </div>
+        )}
       </td>
       {showEdit && <EditUserModal user={user} categories={categories} onClose={() => setShowEdit(false)} />}
     </motion.tr>
@@ -402,7 +409,7 @@ function UserTableRow({ user, categories, selected, onToggle }: { user: UserRow;
 }
 
 // ── Main Client Component ─────────────────────────────────────────────────────
-export default function AdminUsersClient({ users, counts, categories, initialStatus = '' }: Props) {
+export default function AdminUsersClient({ users, counts, categories, initialStatus = '', currentUserId }: Props) {
   const router = useRouter()
   const { t, locale } = useTranslation()
   const [search, setSearch] = useState('')
@@ -581,6 +588,7 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
                     categories={categories}
                     selected={selectedIds.has(user.id)}
                     onToggle={() => toggleRow(user.id)}
+                    isSelf={user.id === currentUserId}
                   />
                 ))}
               </AnimatePresence>

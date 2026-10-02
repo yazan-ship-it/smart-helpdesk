@@ -69,6 +69,7 @@ import { changePassword } from '@/app/actions/account'
 import proxy from '@/proxy'
 import { checkSession } from '@/lib/session-check'
 import { getDemoAccounts } from '@/lib/demo'
+import { parseCannedResponses } from '@/lib/settings'
 import { translateAction } from '@/app/actions/translate'
 import { updateSettings, type SettingsInput } from '@/app/actions/settings'
 import TicketsPage from '@/app/tickets/page'
@@ -1244,5 +1245,33 @@ describe('Test 14: AI Usage Limit', () => {
     expect(await translateAction({ text: 'hello', targetLanguage: 'Arabic' })).toEqual({ success: false, error: 'rate_limited' })
     expect(summarizeTicket).not.toHaveBeenCalled()
     expect(translateText).not.toHaveBeenCalled()
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 15: Review fixes
+// ────────────────────────────────────────────────────────
+describe('Test 15: Review Fixes', () => {
+  it('the users page checks for an admin itself, not only in the layout', async () => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    await expect(AdminUsersPage({ searchParams: Promise.resolve({}) })).rejects.toThrow('NEXT_REDIRECT /tickets')
+    signInAs(adminId, 'ADMIN')
+    const page = (await AdminUsersPage({ searchParams: Promise.resolve({}) })) as ReactElement<{ currentUserId: string }>
+    expect(page.props.currentUserId).toBe(adminId)
+  })
+
+  it('claiming an unassigned ticket is logged as a claim, not "taken over from Unassigned"', async () => {
+    const ticketId = await createTestTicket(employeeId)
+    signInAs(itSupportId, 'IT_SUPPORT', 'Test IT Support')
+    expect(await takeOverTicket(ticketId)).toEqual({})
+    const entry = await prisma.ticketHistory.findFirstOrThrow({ where: { ticketId, event: 'taken_over' } })
+    expect(entry.meta).toBe('{}')
+    expect(entry.action).toBe('Ticket claimed by Test IT Support')
+  })
+
+  it('canned replies are read safely from the settings', () => {
+    expect(parseCannedResponses('[{"id":"1","title":"T","content":"C"},{"id":2},"x"]')).toEqual([{ id: '1', title: 'T', content: 'C' }])
+    expect(parseCannedResponses('not json')).toEqual([])
+    expect(parseCannedResponses(null)).toEqual([])
   })
 })

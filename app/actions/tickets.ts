@@ -244,7 +244,6 @@ export async function takeOverTicket(ticketId: string): Promise<ActionResult> {
   if (ticket.assignedToId === session.userId) return fail('already_yours')
   if (isFinished(ticket.status)) return fail('ticket_closed')
 
-  const previousAgentName = ticket.assignedTo?.name || 'Unassigned'
   const newStatus = ticket.status === 'OPEN' ? 'ASSIGNED' : (ticket.status as Status)
 
   const { count } = await prisma.ticket.updateMany({
@@ -257,7 +256,7 @@ export async function takeOverTicket(ticketId: string): Promise<ActionResult> {
     data: {
       ticketId,
       userId: session.userId,
-      ...historyData({ type: 'taken_over', from: previousAgentName }, session.name),
+      ...historyData({ type: 'taken_over', ...(ticket.assignedTo ? { from: ticket.assignedTo.name } : {}) }, session.name),
     },
   })
 

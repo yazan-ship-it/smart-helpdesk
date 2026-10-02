@@ -448,6 +448,7 @@ export const en = {
     reassigned: 'Reassigned from {from} to {agent} by {actor}',
     reassigned_by_admin: 'Reassigned to {agent} by an admin',
     taken_over: '{actor} took over the ticket from {from}',
+    claimed: '{actor} claimed the ticket',
     priority_changed: 'Priority changed to {to}',
     comment_added: '{actor} added a comment',
     resolution_confirmed: 'The requester confirmed the fix; ticket closed',
@@ -456,6 +457,7 @@ export const en = {
   },
   // Misc UI labels
   ui: {
+    thisIsYou: 'This is you',
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
     showingUsers: 'Showing {shown} of {total} users',

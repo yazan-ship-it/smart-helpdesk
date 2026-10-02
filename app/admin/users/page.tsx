@@ -1,12 +1,15 @@
 import { prisma } from '@/lib/db'
 import { getAppSettings, parseCategories } from '@/lib/settings'
 import AdminUsersClient from './AdminUsersClient'
+import { requireAdmin } from '@/app/actions/auth'
 
 export const metadata = { title: 'User Management | Admin' }
 
 const ACCOUNT_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED', 'INVITED']
 
 export default async function AdminUsersPage(props: { searchParams: Promise<{ status?: string }> }) {
+  // Checked here too: a layout's check does not run again on client-side navigation
+  const admin = await requireAdmin()
   const { status } = await props.searchParams
   const initialStatus = status && ACCOUNT_STATUSES.includes(status) ? status : ''
   const users = await prisma.user.findMany({
@@ -24,7 +27,7 @@ export default async function AdminUsersPage(props: { searchParams: Promise<{ st
       _count: {
         select: {
           createdTickets: true,
-          assignedTickets: { where: { status: 'RESOLVED' } },
+          assignedTickets: { where: { status: { in: ['RESOLVED', 'CLOSED'] } } },
         },
       },
     },
@@ -44,6 +47,7 @@ export default async function AdminUsersPage(props: { searchParams: Promise<{ st
       // Remount when the sidebar link changes ?status=, so the filter follows the URL
       key={initialStatus}
       initialStatus={initialStatus}
+      currentUserId={admin.userId}
       users={users.map((u) => ({
         ...u,
         createdAt: u.createdAt.toISOString(),

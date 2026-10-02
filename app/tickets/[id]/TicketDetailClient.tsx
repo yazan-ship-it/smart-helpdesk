@@ -26,7 +26,7 @@ import {
   Lock,
   AlertCircle,
 } from 'lucide-react'
-import { updateTicketStatus, assignTicket, addComment, takeOverTicket, confirmTicketResolution, reopenTicket, submitCsatRating } from '@/app/actions/tickets'
+import { updateTicketStatus, assignTicket, reassignTicket, addComment, takeOverTicket, confirmTicketResolution, reopenTicket, submitCsatRating } from '@/app/actions/tickets'
 import { formatRelativeTime, formatTicketNumber } from '@/lib/utils'
 import { SlaBadge } from '@/components/SlaBadge'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
@@ -166,6 +166,10 @@ export default function TicketDetailClient({
   const isITSupport = currentUserRole === 'IT_SUPPORT' || isAdmin
   const isAssignedToPeer = isITSupport && !isAdmin && Boolean(ticket.assignedToId) && ticket.assignedToId !== currentUserId
   const isUnassigned = isITSupport && !ticket.assignedToId
+  // Only IT support moves tickets through their statuses or claims them; admins oversee and reassign
+  const canChangeStatus = currentUserRole === 'IT_SUPPORT'
+  // Resolved and closed tickets can't be claimed or reassigned (the server refuses)
+  const isFinished = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
 
   const [isPendingTakeOver, startTransitionTakeOver] = useTransition()
 
@@ -257,7 +261,7 @@ export default function TicketDetailClient({
  if (!selectedAssignee) return
  startTransitionAssign(async () => {
  try {
- const result = await assignTicket(ticket.id, selectedAssignee)
+ const result = await (isAdmin ? reassignTicket : assignTicket)(ticket.id, selectedAssignee)
  if (result?.error) {
  toast.error(t(`errors.${result.error}`, result.params))
  } else {
@@ -891,7 +895,7 @@ export default function TicketDetailClient({
  ─────────────────────────────────────────────────────────── */}
  <div className="space-y-5">
  {/* IT SUPPORT CONTROLS (HIGH-CONTRAST SEGMENTED STATUS PILLS & CONFETTI) */}
- {isITSupport && (
+ {isITSupport && !(isAdmin && isFinished) && (
  <div className="card p-5 border-border bg-gradient-to-b from-indigo-50 dark:from-indigo-500/10 via-white dark:via-zinc-900/90 to-white dark:to-zinc-900/90 shadow-sm  space-y-5">
  <div className="flex items-center justify-between pb-3 border-b border-border">
  <div className="flex items-center gap-2">
@@ -906,7 +910,7 @@ export default function TicketDetailClient({
  </div>
 
  {/* Peer Ticket Edit Lock Banner (Read-Only Guard) */}
-          {isAssignedToPeer && (
+          {isAssignedToPeer && !isFinished && (
             <div className="rounded-xl p-3.5 bg-amber-500/10 border border-amber-500/30 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -944,7 +948,7 @@ export default function TicketDetailClient({
           )}
 
           {/* Unassigned Claim Banner */}
-          {isUnassigned && (
+          {isUnassigned && canChangeStatus && !isFinished && (
             <div className="rounded-xl p-3.5 bg-blue-500/10 border border-blue-500/30 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
@@ -972,6 +976,7 @@ export default function TicketDetailClient({
           )}
 
           {/* Status Machine: only show valid next transitions */}
+ {canChangeStatus && (
  <div>
  <label className="block text-xs font-semibold text-foreground mb-2">
  {locale === 'ar' ? 'تغيير الحالة السريع' : 'Quick Status Change'}
@@ -990,7 +995,7 @@ export default function TicketDetailClient({
  {NEXT_STATUSES[ticket.status as Status]?.map((nextStatus) => {
  const statusConfig: Record<Status, { label: string; cls: string; icon: React.ReactNode }> = {
  OPEN: { label: locale === 'ar' ? 'استلام وإسناد لي' : 'Claim & Assign to Me', cls: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40', icon: <Clock className="w-3.5 h-3.5" /> },
- ASSIGNED: { label: locale === 'ar' ? 'بدء العمل' : 'Start Progress', cls: 'bg-violet-500/20 text-violet-600 dark:text-violet-300 border-violet-500/40', icon: <UserCheck className="w-3.5 h-3.5" /> },
+ ASSIGNED: { label: locale === 'ar' ? 'استلام وإسناد لي' : 'Claim & Assign to Me', cls: 'bg-violet-500/20 text-violet-600 dark:text-violet-300 border-violet-500/40', icon: <UserCheck className="w-3.5 h-3.5" /> },
  IN_PROGRESS: { label: locale === 'ar' ? 'بدء العمل' : 'Start Progress', cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40', icon: <Activity className="w-3.5 h-3.5" /> },
  RESOLVED: { label: locale === 'ar' ? 'تعيين كمنجزة 🎉' : 'Mark Resolved 🎉', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-500/40', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
  CLOSED: { label: locale === 'ar' ? 'إغلاق التذكرة' : 'Close Ticket', cls: 'bg-muted text-foreground border-border', icon: null },
@@ -1018,8 +1023,10 @@ export default function TicketDetailClient({
  </div>
  )}
  </div>
+ )}
 
    {/* Assign / Reassign Specialist Panel */}
+  {!isFinished && (
   <form onSubmit={handleAssignSubmit} className="space-y-3 pt-2 border-t border-border">
   <div className="flex items-center justify-between">
   <label className="block text-xs font-semibold text-foreground">
@@ -1090,6 +1097,7 @@ export default function TicketDetailClient({
   <span>{ticket.assignedTo ? (locale === 'ar' ? 'إعادة إسناد التذكرة' : 'Reassign Ticket') : (locale === 'ar' ? 'إسناد التذكرة' : 'Assign Ticket')}</span>
   </button>
   </form>
+  )}
  </div>
  )}
 

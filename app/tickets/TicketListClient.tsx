@@ -8,6 +8,7 @@ import { TICKET_CATEGORIES } from '@/lib/constants'
 import { formatRelativeTime, formatTicketNumber } from '@/lib/utils'
 import EmptyState from '@/app/components/EmptyState'
 import TicketDrawer from '@/app/components/TicketDrawer'
+import type { CannedResponse } from '@/lib/settings'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useIsClient } from '@/lib/useIsClient'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
@@ -71,6 +72,8 @@ type Props = {
   assignedToMeCount?: number
   activeQueue?: 'assigned_to_me' | 'all'
   agents?: { id: string; name: string }[]
+  /** Admin-defined quick replies, offered in the ticket drawer */
+  cannedResponses?: CannedResponse[]
   isAdminView?: boolean
   /** Admin "SLA breaches" view: the server already filtered the tickets */
   slaBreachedOnly?: boolean
@@ -185,7 +188,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
   return tCat.includes(fCat) || fCat.includes(tCat);
 }
 
- function TicketListClientContent({ tickets, role, currentUserId, totalTicketCount, assignedToMeCount, activeQueue, agents, isAdminView, slaBreachedOnly }: Props) {
+ function TicketListClientContent({ tickets, role, currentUserId, totalTicketCount, assignedToMeCount, activeQueue, agents, cannedResponses = [], isAdminView, slaBreachedOnly }: Props) {
   const { t, locale } = useTranslation()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -395,8 +398,8 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
           {isAdminView
             ? (locale === 'ar' ? 'إدارة ومتابعة كافة بلاغات الدعم الفني للمؤسسة.' : 'Manage and oversee all enterprise helpdesk requests.')
             : (role === 'IT_SUPPORT'
-              ? (locale === 'ar' ? 'فرز وتعيين وحل طلبات الدعم الفني للمؤسسة في الوقت الفعلي.' : 'Triage, assign, and resolve enterprise helpdesk requests in real time.')
-              : (locale === 'ar' ? 'متابعة الحالة، الردود، والتشخيص الذكي لبلاغاتك.' : 'Track status, replies, and automated AI diagnoses for your requests.'))}
+              ? (locale === 'ar' ? 'فرز وتعيين وحل طلبات الدعم الفني للمؤسسة.' : 'Triage, assign, and resolve enterprise helpdesk requests.')
+              : (locale === 'ar' ? 'تابع حالة بلاغاتك وردود فريق الدعم الفني.' : 'Track the status of your requests and replies from IT support.'))}
         </p>
  </div>
 
@@ -1122,6 +1125,8 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
    isOpen={!!selectedTicketId} 
    onClose={() => setSelectedTicketId(null)} 
    currentUserId={currentUserId || ''} 
+   canChangeTickets={role === 'IT_SUPPORT'}
+   cannedResponses={cannedResponses}
  />
  </div>
  )

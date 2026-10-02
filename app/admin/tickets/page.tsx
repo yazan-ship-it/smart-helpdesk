@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
+import { getAppSettings, parseCannedResponses } from '@/lib/settings'
 import TicketListClient from '@/app/tickets/TicketListClient'
 import { slaBreachedWhere } from '@/lib/sla'
 
@@ -48,6 +49,7 @@ export default async function AdminTicketsPage(props: { searchParams: Promise<{ 
       assignedToMeCount={0}
       activeQueue={undefined}
       agents={agents}
+      cannedResponses={parseCannedResponses((await getAppSettings())?.cannedResponses)}
       isAdminView={true}
       slaBreachedOnly={slaBreachedOnly}
     />

@@ -3,7 +3,7 @@
 import { useState, useEffect, useEffectEvent, useTransition, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ExternalLink, MessageSquare, Clock, User, AlertTriangle, Send, RefreshCw, Sparkles, Layers } from 'lucide-react'
+import { X, ExternalLink, MessageSquare, Clock, User, AlertTriangle, Send, RefreshCw, Layers } from 'lucide-react'
 import { formatRelativeTime, formatTicketNumber } from '@/lib/utils'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -12,6 +12,8 @@ import confetti from 'canvas-confetti'
 import { useIsClient } from '@/lib/useIsClient'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
 import AiTranslateButton from '@/app/components/AiTranslateButton'
+import AiTicketSummary from '@/app/components/AiTicketSummary'
+import type { CannedResponse } from '@/lib/settings'
 
 type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
 type TicketDetails = NonNullable<Awaited<ReturnType<typeof getTicketDetails>>>
@@ -56,11 +58,16 @@ export default function TicketDrawer({
   isOpen,
   onClose,
   currentUserId,
+  canChangeTickets,
+  cannedResponses,
 }: {
   ticketId: string | null
   isOpen: boolean
   onClose: () => void
   currentUserId: string
+  /** IT support claims tickets and changes their status; admins can only reply here */
+  canChangeTickets: boolean
+  cannedResponses: CannedResponse[]
 }) {
   const { t, locale, isRTL } = useTranslation()
   const [ticket, setTicket] = useState<TicketDetails | null>(null)
@@ -72,6 +79,9 @@ export default function TicketDrawer({
   // createPortal needs document, so render nothing during SSR
   const mounted = useIsClient()
   const loading = isOpen && !!ticketId && loadedId !== ticketId
+  // Another agent's ticket: read-only here until taken over. Finished tickets can't be taken over.
+  const ownedByPeer = Boolean(ticket?.assignedToId && ticket.assignedToId !== currentUserId)
+  const finished = ticket?.status === 'RESOLVED' || ticket?.status === 'CLOSED'
 
   // Forget the loaded ticket when the drawer closes so reopening it shows the spinner again
   if (!isOpen && loadedId !== null) setLoadedId(null)
@@ -255,21 +265,8 @@ export default function TicketDrawer({
                   </div>
                 </div>
 
-                {/* AI Triage Card */}
-                {true && (
-                  <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4 relative overflow-hidden">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="w-4 h-4 text-indigo-500" />
-                      <span className="text-xs font-bold text-foreground tracking-wide block uppercase">
-                        {locale === 'ar' ? 'ملخص التشخيص الذكي' : 'AI Diagnostic Summary'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground/80 leading-relaxed mb-3">
-                      {locale === 'ar' ? `تصنيف آلي للبلاغ في فئة ${getCategoryLabel(ticket.category, locale)}. يُوصى بمراجعة السجلات وصلاحيات المستخدم قبل التصعيد.` : `Automated semantic incident classification for ${ticket.category}. Suggest reviewing logs and affected user permissions before escalating.`}
-                    </p>
-                    
-                  </div>
-                )}
+                {/* Real Gemini summary on request (the drawer is only used by IT staff and admins) */}
+                <AiTicketSummary ticketId={ticket.id} onInsert={(text) => setCommentText((prev) => (prev ? `${prev}\n\n${text}` : text))} />
 
                 {/* Conversation & Audit History */}
                 <div>
@@ -332,7 +329,7 @@ export default function TicketDrawer({
             {ticket && (
               <div className="shrink-0 p-3 border-t border-border bg-card/95 backdrop-blur-sm z-10">
                 
-                {ticket.assignedToId && ticket.assignedToId !== currentUserId ? (
+                {canChangeTickets && ownedByPeer && !finished ? (
                    <div className="p-4 bg-orange-500/10 border-t border-orange-500/20 flex items-center justify-between">
                      <div className="flex items-center gap-3">
                        <AlertTriangle className="w-5 h-5 text-orange-600" />
@@ -355,22 +352,22 @@ export default function TicketDrawer({
                    </div>
                 ) : (
                   <div className="p-4 flex flex-col gap-3">
-                    {/* Quick Canned Response Chips */}
-                    <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                      {[
-                        { en: "Password reset credentials sent.", ar: "تم إرسال بيانات تعيين كلمة المرور." },
-                        { en: "Please provide device hostname/Asset ID.", ar: "يرجى تزويدنا باسم الجهاز أو معرّف الأصل (Asset ID)." },
-                        { en: "Issue resolved on network switch. Please verify.", ar: "تم حل المشكلة على مقسم الشبكة. يرجى التحقق." }
-                      ].map((chip) => (
-                        <button
-                          key={chip.en}
-                          onClick={() => setCommentText(locale === 'ar' ? chip.ar : chip.en)}
-                          className="px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground hover:bg-secondary hover:text-foreground whitespace-nowrap transition-colors border border-border"
-                        >
-                          {locale === 'ar' ? chip.ar : chip.en}
-                        </button>
-                      ))}
-                    </div>
+                    {/* The admin's canned replies (Settings) */}
+                    {cannedResponses.length > 0 && (
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        {cannedResponses.map((reply) => (
+                          <button
+                            key={reply.id}
+                            type="button"
+                            title={reply.content}
+                            onClick={() => setCommentText(reply.content)}
+                            className="px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground hover:bg-secondary hover:text-foreground whitespace-nowrap transition-colors border border-border"
+                          >
+                            {reply.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     <form onSubmit={handleAddComment} className="flex gap-2 relative">
                       <input
@@ -389,6 +386,7 @@ export default function TicketDrawer({
                       </button>
                     </form>
 
+                    {canChangeTickets && !ownedByPeer && (
                     <div className="flex items-center gap-2 pt-2 border-t border-border">
                       {/* Contextual Status Transition */}
                       {(() => {
@@ -426,6 +424,7 @@ export default function TicketDrawer({
                         )
                       })()}
                     </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
+import { parseCannedResponses } from '@/lib/settings'
 import TicketDetailClient, { type TicketDetailData } from './TicketDetailClient'
 import type { Metadata } from 'next'
 import { formatTicketNumber } from '@/lib/utils'
@@ -54,9 +55,7 @@ export default async function TicketDetailPage({
  : []
 
  const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
- const cannedResponses = settings?.cannedResponses 
-   ? JSON.parse(settings.cannedResponses) 
-   : []
+ const cannedResponses = parseCannedResponses(settings?.cannedResponses)
 
  const serializedTicket: TicketDetailData = {
  id: ticket.id,

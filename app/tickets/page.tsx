@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
+import { getAppSettings, parseCannedResponses } from '@/lib/settings'
 import TicketListClient from './TicketListClient'
 
 export const metadata = { title: 'Tickets' }
@@ -79,6 +80,7 @@ export default async function TicketsPage(props: {
       assignedToMeCount={assignedToMeCount}
       activeQueue={isAssignedToMeQueue ? 'assigned_to_me' : (searchParams?.queue === 'all' ? 'all' : undefined)}
       agents={agents}
+      cannedResponses={parseCannedResponses((await getAppSettings())?.cannedResponses)}
     />
   )
 }

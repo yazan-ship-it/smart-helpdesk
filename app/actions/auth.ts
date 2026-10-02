@@ -4,12 +4,22 @@ import bcrypt from 'bcryptjs'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { createSession, deleteSession, getSession, type Role } from '@/lib/session'
+import { clearAttempts, clientAddress, LOGIN_PER_ACCOUNT, LOGIN_PER_ADDRESS, recordAttempt, retryAfter } from '@/lib/rate-limit'
 
 /** Error codes; the login page shows them in the user's language */
-export type LoginError = 'missing_fields' | 'invalid_credentials' | 'pending' | 'rejected' | 'suspended' | 'maintenance'
+export type LoginError =
+  | 'missing_fields'
+  | 'invalid_credentials'
+  | 'too_many_attempts'
+  | 'pending'
+  | 'rejected'
+  | 'suspended'
+  | 'maintenance'
 
 export type AuthState = {
- error?: LoginError
+  error?: LoginError
+  /** With too_many_attempts */
+  retryAfterMinutes?: number
 } | undefined
 
 export type RegisterState = {
@@ -31,11 +41,20 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
 
   if (!email || !password) return { error: 'missing_fields' }
 
+  // Brute-force protection: checked before the password, counted only on failure
+  const accountKey = `login:account:${email}`
+  const addressKey = `login:address:${await clientAddress()}`
+  const wait = Math.max(await retryAfter(accountKey, LOGIN_PER_ACCOUNT), await retryAfter(addressKey, LOGIN_PER_ADDRESS))
+  if (wait > 0) return { error: 'too_many_attempts', retryAfterMinutes: Math.ceil(wait / 60_000) }
+
   const user = await prisma.user.findUnique({ where: { email } })
   // Same error for unknown email and wrong password, so accounts can't be enumerated
   if (!user || !(await bcrypt.compare(password, user.password))) {
+    await recordAttempt(accountKey, LOGIN_PER_ACCOUNT)
+    await recordAttempt(addressKey, LOGIN_PER_ADDRESS)
     return { error: 'invalid_credentials' }
   }
+  await clearAttempts(accountKey)
 
   if (user.accountStatus === 'PENDING') return { error: 'pending' }
   if (user.accountStatus === 'REJECTED') return { error: 'rejected' }

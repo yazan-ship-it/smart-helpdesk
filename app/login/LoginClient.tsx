@@ -60,9 +60,9 @@ export default function LoginClient({
   // Trigger error toast on failed submission
   useEffect(() => {
     if (state?.error) {
-      toast.error(t(`auth.errors.${state.error}`))
+      toast.error(t(`auth.errors.${state.error}`, { minutes: state.retryAfterMinutes ?? 0 }))
     }
-  }, [state?.error, t])
+  }, [state, t])
 
   // Client-side validation before submission
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -179,7 +179,7 @@ export default function LoginClient({
           ) : state?.error ? (
             <div className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 rounded-xl p-3 text-sm flex items-center gap-2 mb-4 animate-in fade-in slide-in-from-top-1 duration-150">
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-              <span>{t(`auth.errors.${state.error}`)}</span>
+              <span>{t(`auth.errors.${state.error}`, { minutes: state.retryAfterMinutes ?? 0 })}</span>
             </div>
           ) : endReason ? (
             <div role="status" className="bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 rounded-xl p-3 text-sm flex items-center gap-2 mb-4">

@@ -19,6 +19,10 @@ vi.mock('@/lib/session', () => ({
   SESSION_COOKIE: 'helpdesk-session',
 }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
+// The client address used for rate limiting (a documentation-only IP range)
+vi.mock('next/headers', () => ({
+  headers: vi.fn(async () => new Headers({ 'x-forwarded-for': '203.0.113.1' })),
+}))
 // Like the real ones, redirect() and notFound() throw to stop the action.
 vi.mock('next/navigation', () => ({
   redirect: vi.fn((url: string) => {
@@ -44,6 +48,7 @@ import { unlink } from 'fs/promises'
 import path from 'path'
 import type { ReactElement } from 'react'
 import { NextRequest } from 'next/server'
+import { headers } from 'next/headers'
 import { getSession, createSession, decrypt, type Role, type SessionPayload } from '@/lib/session'
 import { AiNotConfiguredError, isAiConfigured, summarizeTicket, triageTicket, translateText } from '@/lib/gemini'
 import { login } from '@/app/actions/auth'
@@ -134,7 +139,13 @@ function form(fields: Record<string, string>) {
 }
 
 // ─── Setup & Teardown ─────────────────────────────────
+const clearTestRateLimits = () =>
+  prisma.rateLimit.deleteMany({
+    where: { OR: [{ key: { contains: String(stamp) } }, { key: { startsWith: 'login:address:203.0.113.' } }, { key: { contains: 'unknown-' } }] },
+  })
+
 beforeAll(async () => {
+  await clearTestRateLimits()
   employeeId = await createUser('Test Employee', employeeEmail, 'EMPLOYEE')
   itSupportId = await createUser('Test IT Support', itSupportEmail, 'IT_SUPPORT')
   itPeerId = await createUser('Test IT Peer', `test-it-peer-${stamp}@test.com`, 'IT_SUPPORT')
@@ -143,6 +154,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await clearTestRateLimits()
   // Tickets cascade to their comments and history
   await prisma.ticket.deleteMany({ where: { createdById: { in: testUserIds } } })
   await prisma.ticketHistory.deleteMany({ where: { userId: { in: testUserIds } } })
@@ -996,5 +1008,58 @@ describe('Test 11: Sessions', () => {
     vi.stubEnv('DEMO_MODE', 'true')
     expect(getDemoAccounts().map((a) => a.email)).toContain('admin@company.com')
     vi.unstubAllEnvs()
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 12: Sign-in rate limiting
+// ────────────────────────────────────────────────────────
+describe('Test 12: Sign-in Rate Limiting', () => {
+  const email = `test-ratelimit-${stamp}@test.com`
+  const fromAddress = (ip: string) => vi.mocked(headers).mockResolvedValue(new Headers({ 'x-forwarded-for': ip }) as never)
+  const attempt = (password: string, who = email) => login(undefined, form({ email: who, password }))
+
+  beforeAll(async () => {
+    await createUser('Rate Limited', email, 'EMPLOYEE')
+  })
+
+  it('locks an account for 15 minutes after 5 wrong passwords, even for the right password', async () => {
+    fromAddress('203.0.113.10')
+    for (let i = 0; i < 5; i++) expect(await attempt('wrong-password')).toEqual({ error: 'invalid_credentials' })
+
+    vi.mocked(createSession).mockClear()
+    expect(await attempt(PASSWORD)).toEqual({ error: 'too_many_attempts', retryAfterMinutes: 15 })
+    expect(createSession).not.toHaveBeenCalled()
+
+    // Another address does not help: the limit is per account
+    fromAddress('203.0.113.11')
+    expect(await attempt(PASSWORD)).toMatchObject({ error: 'too_many_attempts' })
+  })
+
+  it('allows the account again once the 15-minute window has passed', async () => {
+    await prisma.rateLimit.update({
+      where: { key: `login:account:${email}` },
+      data: { windowStart: new Date(Date.now() - 16 * 60 * 1000) },
+    })
+    await expect(attempt(PASSWORD)).rejects.toThrow(/^NEXT_REDIRECT \/tickets$/)
+  })
+
+  it('a successful sign-in resets the count of failures', async () => {
+    fromAddress('203.0.113.12')
+    for (let i = 0; i < 4; i++) await attempt('wrong-password')
+    await expect(attempt(PASSWORD)).rejects.toThrow('NEXT_REDIRECT')
+    for (let i = 0; i < 4; i++) await attempt('wrong-password')
+    expect(await attempt('wrong-password')).toEqual({ error: 'invalid_credentials' })
+  })
+
+  it('locks out an address that tries many accounts', async () => {
+    fromAddress('203.0.113.13')
+    for (let i = 0; i < 20; i++) {
+      expect(await attempt('guess', `unknown-${stamp}-${i}@test.com`)).toEqual({ error: 'invalid_credentials' })
+    }
+    expect(await attempt('guess', `unknown-${stamp}-x@test.com`)).toMatchObject({ error: 'too_many_attempts' })
+    // Other people are not affected
+    fromAddress('203.0.113.14')
+    await expect(login(undefined, form({ email: employeeEmail, password: PASSWORD }))).rejects.toThrow('NEXT_REDIRECT')
   })
 })

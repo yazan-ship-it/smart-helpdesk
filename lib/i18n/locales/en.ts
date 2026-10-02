@@ -33,6 +33,7 @@ export const en = {
     errors: {
       missing_fields: 'Please enter your email and password.',
       invalid_credentials: 'Invalid email or password.',
+      too_many_attempts: 'Too many failed sign-in attempts. Please try again in {minutes} min.',
       pending: 'Your account is waiting for admin approval.',
       rejected: 'Your account request was rejected. Please contact your administrator.',
       suspended: 'Your account has been suspended. Please contact your administrator.',

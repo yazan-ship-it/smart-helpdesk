@@ -102,6 +102,16 @@ model TicketHistory {
   user     User   @relation(fields: [userId], references: [id])
 }
 
+/// Fixed-window attempt counters for rate limiting (lib/rate-limit.ts)
+model RateLimit {
+  /// e.g. "login:account:alice@company.com"
+  key         String   @id
+  count       Int
+  windowStart DateTime
+
+  @@index([windowStart])
+}
+
 model AppSettings {
   id                    String   @id @default("singleton")
   appName               String   @default("Smart Helpdesk")

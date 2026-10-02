@@ -2,12 +2,13 @@
 
 import { AiNotConfiguredError, translateText } from '@/lib/gemini'
 import { getSession } from '@/lib/session'
+import { allowAiRequest } from '@/lib/rate-limit'
 
 const MAX_LENGTH = 5000
 
 export type TranslateResult =
   | { success: true; translation: string }
-  | { success: false; error: 'unauthorized' | 'empty' | 'too_long' | 'not_configured' | 'failed' }
+  | { success: false; error: 'unauthorized' | 'empty' | 'too_long' | 'rate_limited' | 'not_configured' | 'failed' }
 
 export async function translateAction({
   text,
@@ -21,6 +22,7 @@ export async function translateAction({
 
   if (!text?.trim()) return { success: false, error: 'empty' }
   if (text.length > MAX_LENGTH) return { success: false, error: 'too_long' }
+  if (!(await allowAiRequest(session.userId))) return { success: false, error: 'rate_limited' }
 
   try {
     const translation = await translateText(text, targetLanguage === 'Arabic' ? 'Arabic' : 'English')

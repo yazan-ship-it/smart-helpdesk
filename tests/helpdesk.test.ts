@@ -142,7 +142,7 @@ function form(fields: Record<string, string>) {
 // ─── Setup & Teardown ─────────────────────────────────
 const clearTestRateLimits = () =>
   prisma.rateLimit.deleteMany({
-    where: { OR: [{ key: { contains: String(stamp) } }, { key: { startsWith: 'login:address:203.0.113.' } }, { key: { startsWith: 'register:address:203.0.113.' } }, { key: { contains: 'unknown-' } }] },
+    where: { OR: [{ key: { contains: String(stamp) } }, { key: { startsWith: 'login:address:203.0.113.' } }, { key: { startsWith: 'register:address:203.0.113.' } }, { key: { contains: 'unknown-' } }, { key: { in: testUserIds.map((id) => `ai:user:${id}`) } }] },
   })
 
 beforeAll(async () => {
@@ -1187,5 +1187,62 @@ describe('Test 13: Server-side Validation', () => {
     }
     const blocked = await register(undefined, form({ name: 'Someone', email: `test-register-${stamp}-x@test.com`, password: 'long-enough-1', role: 'IT_SUPPORT' }))
     expect(blocked).toMatchObject({ error: 'too_many_attempts' })
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 14: AI usage limit — one user can't use up the Gemini quota
+// ────────────────────────────────────────────────────────
+describe('Test 14: AI Usage Limit', () => {
+  let ticketId: string
+  const exhaust = (userId: string) =>
+    prisma.rateLimit.upsert({
+      where: { key: `ai:user:${userId}` },
+      create: { key: `ai:user:${userId}`, count: 30, windowStart: new Date() },
+      update: { count: 30, windowStart: new Date() },
+    })
+
+  beforeAll(async () => {
+    ticketId = await createTestTicket(employeeId)
+  })
+
+  it('counts each AI request against the user', async () => {
+    const used = async () => (await prisma.rateLimit.findUnique({ where: { key: `ai:user:${itPeerId}` } }))?.count ?? 0
+    const before = await used()
+    signInAs(itPeerId, 'IT_SUPPORT')
+    vi.mocked(translateText).mockResolvedValueOnce('مرحبا')
+    expect(await translateAction({ text: 'hello', targetLanguage: 'Arabic' })).toEqual({ success: true, translation: 'مرحبا' })
+    expect(await used()).toBe(before + 1)
+  })
+
+  it('over the limit, triage answers with the keyword rules without calling Gemini', async () => {
+    await exhaust(employeeId)
+    signInAs(employeeId, 'EMPLOYEE')
+    vi.mocked(triageTicket).mockClear()
+    const res = await triagePOST(
+      new NextRequest('http://localhost/api/ai/triage', {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Printer jam', description: 'The printer on floor 2 is jammed' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ source: 'rules' })
+    expect(triageTicket).not.toHaveBeenCalled()
+  })
+
+  it('over the limit, summaries and translation are refused', async () => {
+    await exhaust(itSupportId)
+    signInAs(itSupportId, 'IT_SUPPORT')
+    vi.mocked(summarizeTicket).mockClear()
+    vi.mocked(translateText).mockClear()
+
+    const res = await summarizePOST(new NextRequest(`http://localhost/api/ai/summarize/${ticketId}`, { method: 'POST' }), {
+      params: Promise.resolve({ id: ticketId }),
+    })
+    expect(res.status).toBe(429)
+    expect(await translateAction({ text: 'hello', targetLanguage: 'Arabic' })).toEqual({ success: false, error: 'rate_limited' })
+    expect(summarizeTicket).not.toHaveBeenCalled()
+    expect(translateText).not.toHaveBeenCalled()
   })
 })

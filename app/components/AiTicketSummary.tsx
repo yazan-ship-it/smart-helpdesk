@@ -10,13 +10,14 @@ type Summary = { summary: string; nextAction: string }
 export default function AiTicketSummary({ ticketId, onInsert }: { ticketId: string; onInsert: (text: string) => void }) {
   const { t, locale } = useTranslation()
   const [summary, setSummary] = useState<Summary | null>(null)
-  const [status, setStatus] = useState<'idle' | 'loading' | 'not_configured' | 'failed'>('idle')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'not_configured' | 'rate_limited' | 'failed'>('idle')
 
   const generate = async () => {
     setStatus('loading')
     try {
       const res = await fetch(`/api/ai/summarize/${ticketId}?locale=${locale}`, { method: 'POST' })
       if (res.status === 503) return setStatus('not_configured')
+      if (res.status === 429) return setStatus('rate_limited')
       if (!res.ok) return setStatus('failed')
       setSummary((await res.json()) as Summary)
       setStatus('idle')
@@ -54,7 +55,7 @@ export default function AiTicketSummary({ ticketId, onInsert }: { ticketId: stri
         </button>
       </div>
 
-      {(status === 'not_configured' || status === 'failed') && (
+      {(status === 'not_configured' || status === 'rate_limited' || status === 'failed') && (
         <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-2.5">
           {t(`ai.summaryErrors.${status}`)}
         </p>

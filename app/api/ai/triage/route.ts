@@ -3,6 +3,7 @@ import { isAiConfigured, triageTicket } from '@/lib/gemini'
 import { ruleBasedTriage, type Locale, type TriageSuggestion } from '@/lib/ai/triage'
 import { getSession } from '@/lib/session'
 import { getAppSettings, parseCategories } from '@/lib/settings'
+import { allowAiRequest } from '@/lib/rate-limit'
 
 // Cap what we send to the model to keep latency and cost predictable
 const MAX_TITLE = 200
@@ -33,7 +34,8 @@ export async function POST(req: NextRequest) {
   const locale: Locale = body.locale === 'ar' ? 'ar' : 'en'
   const categories = parseCategories(settings?.categoriesList)
 
-  if (isAiConfigured()) {
+  // Over the per-user limit: answer with the keyword rules instead of calling Gemini
+  if (isAiConfigured() && (await allowAiRequest(session.userId))) {
     try {
       const result: TriageSuggestion = { source: 'ai', ...(await triageTicket(title, description, categories, locale)) }
       return NextResponse.json(result)

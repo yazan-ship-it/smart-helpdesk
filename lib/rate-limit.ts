@@ -11,6 +11,8 @@ export const LOGIN_PER_ACCOUNT: RateLimitRule = { limit: 5, windowMs: 15 * MINUT
 export const LOGIN_PER_ADDRESS: RateLimitRule = { limit: 20, windowMs: 15 * MINUTE }
 /** Account requests per client address */
 export const REGISTER_PER_ADDRESS: RateLimitRule = { limit: 5, windowMs: 60 * MINUTE }
+/** Gemini requests per user (triage, summaries, translation), so one user can't use up the quota */
+export const AI_PER_USER: RateLimitRule = { limit: 30, windowMs: 10 * MINUTE }
 
 /*
  * Fixed-window counters stored in the database, so limits survive restarts and
@@ -41,6 +43,14 @@ export async function recordAttempt(key: string, rule: RateLimitRule): Promise<v
   })
   // Housekeeping: drop counters whose window ended long ago
   await prisma.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(now.getTime() - 24 * 60 * MINUTE) } } })
+}
+
+/** Counts one AI request for the user; false if they are over their limit */
+export async function allowAiRequest(userId: string): Promise<boolean> {
+  const key = `ai:user:${userId}`
+  if ((await retryAfter(key, AI_PER_USER)) > 0) return false
+  await recordAttempt(key, AI_PER_USER)
+  return true
 }
 
 export async function clearAttempts(key: string): Promise<void> {

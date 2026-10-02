@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { AiNotConfiguredError, summarizeTicket } from '@/lib/gemini'
 import { prisma } from '@/lib/db'
 import { getSession } from '@/lib/session'
+import { allowAiRequest } from '@/lib/rate-limit'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession()
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
   if (!ticket) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!(await allowAiRequest(session.userId))) {
+    return NextResponse.json({ error: 'Too many AI requests' }, { status: 429 })
+  }
 
   try {
     const result = await summarizeTicket(

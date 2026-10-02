@@ -11,7 +11,13 @@ import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 // Server code reads the session from Next.js cookies; stub it so tests can pick the user.
-vi.mock('@/lib/session', () => ({ getSession: vi.fn(), createSession: vi.fn(), deleteSession: vi.fn() }))
+vi.mock('@/lib/session', () => ({
+  getSession: vi.fn(),
+  createSession: vi.fn(),
+  deleteSession: vi.fn(),
+  decrypt: vi.fn(),
+  SESSION_COOKIE: 'helpdesk-session',
+}))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 // Like the real ones, redirect() and notFound() throw to stop the action.
 vi.mock('next/navigation', () => ({
@@ -38,7 +44,7 @@ import { unlink } from 'fs/promises'
 import path from 'path'
 import type { ReactElement } from 'react'
 import { NextRequest } from 'next/server'
-import { getSession, createSession, type Role, type SessionPayload } from '@/lib/session'
+import { getSession, createSession, decrypt, type Role, type SessionPayload } from '@/lib/session'
 import { AiNotConfiguredError, isAiConfigured, summarizeTicket, triageTicket, translateText } from '@/lib/gemini'
 import { login } from '@/app/actions/auth'
 import {
@@ -52,7 +58,9 @@ import {
   addComment,
   getTicketDetails,
 } from '@/app/actions/tickets'
-import { updateUserRole, updateUserStatus } from '@/app/actions/admin'
+import { inviteUser, updateUserRole, updateUserStatus } from '@/app/actions/admin'
+import { changePassword } from '@/app/actions/account'
+import proxy from '@/proxy'
 import { translateAction } from '@/app/actions/translate'
 import { updateSettings, type SettingsInput } from '@/app/actions/settings'
 import TicketsPage from '@/app/tickets/page'
@@ -78,8 +86,8 @@ let itPeerId: string
 let adminId: string
 const testUserIds: string[] = []
 
-function signInAs(userId: string, role: Role, name = 'Test User') {
-  vi.mocked(getSession).mockResolvedValue({ userId, role, name } as SessionPayload)
+function signInAs(userId: string, role: Role, name = 'Test User', extra: Partial<SessionPayload> = {}) {
+  vi.mocked(getSession).mockResolvedValue({ userId, role, name, ...extra } as SessionPayload)
 }
 
 function signedOut() {
@@ -151,7 +159,7 @@ describe('Test 1: User Login', () => {
       /^NEXT_REDIRECT \/tickets$/
     )
     expect(createSession).toHaveBeenCalledWith(
-      { userId: employeeId, role: 'EMPLOYEE', name: 'Test Employee', email: employeeEmail },
+      { userId: employeeId, role: 'EMPLOYEE', name: 'Test Employee', email: employeeEmail, mustChangePassword: false },
       { remember: false },
     )
     const user = await prisma.user.findUnique({ where: { id: employeeId } })
@@ -809,5 +817,88 @@ describe('Test 9: Admin Settings', () => {
     expect(await updateSettings(valid)).toEqual({})
     const saved = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
     expect(saved).toMatchObject({ appName: 'Acme IT Desk', supportEmail: 'it@acme.test', slaHighHours: 24 })
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 10: Invites & Passwords — temporary password, forced change
+// ────────────────────────────────────────────────────────
+describe('Test 10: Invites & Passwords', () => {
+  const invitedEmail = `test-invited-${stamp}@test.com`
+  let invitedId: string
+  let tempPassword: string
+
+  const passwordForm = (current: string, next: string, confirm = next) =>
+    form({ currentPassword: current, newPassword: next, confirmPassword: confirm })
+
+  it('only admins can invite users', async () => {
+    signInAs(itSupportId, 'IT_SUPPORT')
+    await expect(inviteUser({ name: 'Nope', email: 'nope@test.com', role: 'ADMIN' })).rejects.toThrow('NEXT_REDIRECT /tickets')
+  })
+
+  it('an invite creates an INVITED account and returns a one-time password', async () => {
+    signInAs(adminId, 'ADMIN')
+    const result = await inviteUser({ name: 'New Starter', email: invitedEmail.toUpperCase(), role: 'EMPLOYEE' })
+    expect(result.error).toBeUndefined()
+    expect(result.tempPassword).toMatch(/^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$/)
+    tempPassword = result.tempPassword!
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: invitedEmail } })
+    invitedId = user.id
+    testUserIds.push(user.id)
+    expect(user).toMatchObject({ name: 'New Starter', role: 'EMPLOYEE', accountStatus: 'INVITED' })
+    expect(await bcrypt.compare(tempPassword, user.password)).toBe(true)
+
+    expect((await inviteUser({ name: 'Again', email: invitedEmail, role: 'EMPLOYEE' })).error).toMatch(/already exists/)
+  })
+
+  it('signing in with the temporary password forces a password change', async () => {
+    vi.mocked(createSession).mockClear()
+    await expect(login(undefined, form({ email: invitedEmail, password: tempPassword }))).rejects.toThrow(
+      'NEXT_REDIRECT /account/password'
+    )
+    expect(vi.mocked(createSession).mock.lastCall?.[0]).toMatchObject({ userId: invitedId, mustChangePassword: true })
+  })
+
+  it('the proxy keeps a user with a temporary password on the password page', async () => {
+    vi.mocked(decrypt).mockResolvedValue({ userId: invitedId, role: 'EMPLOYEE', mustChangePassword: true } as SessionPayload)
+    const location = async (path: string) => (await proxy(new NextRequest(`http://localhost${path}`))).headers.get('location')
+    expect(await location('/tickets')).toBe('http://localhost/account/password')
+    expect(await location('/tickets/new')).toBe('http://localhost/account/password')
+    expect(await location('/account/password')).toBeNull()
+
+    vi.mocked(decrypt).mockResolvedValue({ userId: employeeId, role: 'EMPLOYEE' } as SessionPayload)
+    expect(await location('/tickets')).toBeNull()
+    expect(await location('/admin/users')).toBe('http://localhost/tickets')
+
+    vi.mocked(decrypt).mockResolvedValue(null)
+    expect(await location('/account/password')).toBe('http://localhost/login')
+  })
+
+  it.each([
+    ['the current password is wrong', ['wrong-one', 'brand-new-pass'], 'wrong_current'],
+    ['the new password is too short', [null, 'short'], 'too_short'],
+    ['the confirmation does not match', [null, 'brand-new-pass', 'brand-new-pazz'], 'mismatch'],
+    ['the new password equals the old one', [null, null], 'same_as_current'],
+  ] as const)('rejects the change when %s', async (_label, [current, next, confirm], error) => {
+    signInAs(invitedId, 'EMPLOYEE', 'New Starter', { mustChangePassword: true })
+    const result = await changePassword(undefined, passwordForm(current ?? tempPassword, next ?? tempPassword, confirm ?? next ?? tempPassword))
+    expect(result).toEqual({ error })
+  })
+
+  it('setting a password activates the account and continues into the app', async () => {
+    signInAs(invitedId, 'EMPLOYEE', 'New Starter', { mustChangePassword: true })
+    vi.mocked(createSession).mockClear()
+    await expect(changePassword(undefined, passwordForm(tempPassword, 'my-own-password'))).rejects.toThrow('NEXT_REDIRECT /tickets')
+    expect(vi.mocked(createSession).mock.lastCall?.[0]).not.toHaveProperty('mustChangePassword')
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: invitedId } })
+    expect(user.accountStatus).toBe('APPROVED')
+    await expect(login(undefined, form({ email: invitedEmail, password: 'my-own-password' }))).rejects.toThrow(/^NEXT_REDIRECT \/tickets$/)
+  })
+
+  it('any user can change their password later without being redirected', async () => {
+    signInAs(invitedId, 'EMPLOYEE', 'New Starter')
+    expect(await changePassword(undefined, passwordForm('my-own-password', 'another-password'))).toEqual({ success: true })
   })
 })

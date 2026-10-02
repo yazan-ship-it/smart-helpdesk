@@ -106,56 +106,93 @@ function RoleBadge({ role }: { role: string }) {
 
 // ── Invite User Modal ─────────────────────────────────────────────────────────
 function InviteUserModal({ onClose }: { onClose: () => void }) {
-  const { locale } = useTranslation()
+  const { t, locale } = useTranslation()
   const router = useRouter()
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('EMPLOYEE')
+  const [tempPassword, setTempPassword] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const [isPending, startTransition] = useTransition()
   const mounted = useIsClient()
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault()
     startTransition(async () => {
-      const res = await inviteUser(email, role)
+      const res = await inviteUser({ name, email, role })
       if (res.error) {
         toast.error(res.error)
-      } else {
-        toast.success(`Invitation created for ${email}. (Email integration pending)`)
+      } else if (res.tempPassword) {
+        setTempPassword(res.tempPassword)
         router.refresh()
-        onClose()
       }
     })
   }
 
+  const copy = async () => {
+    if (!tempPassword) return
+    await navigator.clipboard.writeText(tempPassword)
+    setCopied(true)
+  }
+
+  const inputClass = 'w-full bg-background border border-border rounded-xl px-3 py-2 text-sm'
+
   const content = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-card w-full max-w-md rounded-2xl border border-border p-6 shadow-xl relative">
-        <button onClick={onClose} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground">
+        <button onClick={onClose} className="absolute end-4 top-4 text-muted-foreground hover:text-foreground" aria-label={t('common.cancel')}>
           <X className="w-5 h-5" />
         </button>
-        <h2 className="text-xl font-bold mb-4">{locale === 'ar' ? 'دعوة مستخدم' : 'Invite User'}</h2>
-        <form onSubmit={handleInvite} className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Email Address</label>
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm" placeholder="user@company.com" />
+
+        {tempPassword ? (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold">{t('invite.createdTitle')}</h2>
+            <p className="text-sm text-muted-foreground">{t('invite.createdIntro', { name })}</p>
+            <div className="flex items-center gap-2">
+              <code dir="ltr" className="flex-1 text-center text-lg font-mono tracking-wider bg-muted rounded-xl px-3 py-2 select-all">
+                {tempPassword}
+              </code>
+              <button type="button" onClick={copy} className="px-3 py-2 rounded-xl text-sm font-medium border border-border hover:bg-muted">
+                {copied ? t('invite.copied') : t('invite.copy')}
+              </button>
+            </div>
+            <div className="flex justify-end">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground">
+                {t('invite.done')}
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Role</label>
-            <select value={role} onChange={e => setRole(e.target.value as Role)} className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm">
-              <option value="EMPLOYEE">{locale === 'ar' ? 'موظف' : 'Employee'}</option>
-              <option value="IT_SUPPORT">{locale === 'ar' ? 'دعم فني' : 'IT Support'}</option>
-              <option value="ADMIN">{locale === 'ar' ? 'مدير النظام' : 'Admin'}</option>
-            </select>
-          </div>
-          <p className="text-[10px] text-muted-foreground">Note: Since email sending is not yet configured, this creates a user with &apos;INVITED&apos; status and a temporary placeholder password.</p>
-          <div className="flex justify-end gap-2 mt-6">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted text-muted-foreground">{locale === 'ar' ? 'إلغاء' : 'Cancel'}</button>
-            <button type="submit" disabled={isPending} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50">
-              {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Send Invite
-            </button>
-          </div>
-        </form>
+        ) : (
+          <>
+            <h2 className="text-xl font-bold mb-4">{t('invite.title')}</h2>
+            <form onSubmit={handleInvite} className="space-y-4">
+              <div>
+                <label htmlFor="invite-name" className="block text-xs font-semibold text-muted-foreground mb-1">{t('invite.name')}</label>
+                <input id="invite-name" required minLength={2} value={name} onChange={e => setName(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label htmlFor="invite-email" className="block text-xs font-semibold text-muted-foreground mb-1">{t('invite.email')}</label>
+                <input id="invite-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="user@company.com" dir="ltr" />
+              </div>
+              <div>
+                <label htmlFor="invite-role" className="block text-xs font-semibold text-muted-foreground mb-1">{t('invite.role')}</label>
+                <select id="invite-role" value={role} onChange={e => setRole(e.target.value as Role)} className={inputClass}>
+                  {(['EMPLOYEE', 'IT_SUPPORT', 'ADMIN'] as const).map((r) => (
+                    <option key={r} value={r}>{getRoleLabel(r, locale)}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground">{t('invite.note')}</p>
+              <div className="flex justify-end gap-2 mt-6">
+                <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted text-muted-foreground">{t('common.cancel')}</button>
+                <button type="submit" disabled={isPending} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50">
+                  {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isPending ? t('invite.creating') : t('invite.create')}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </motion.div>
     </div>
   )

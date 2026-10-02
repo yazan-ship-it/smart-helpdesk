@@ -255,6 +255,7 @@ export const en = {
   },
   // User Dropdown & Status
   userDropdown: {
+    changePassword: 'Change password',
     available: 'Available',
     away: 'Away',
     busy: 'Busy',
@@ -362,6 +363,44 @@ export const en = {
       unavailable: 'Suggestions are unavailable right now. Please choose the category and priority yourself.',
       disclaimer: 'Suggestions can be wrong. You decide what is submitted.',
     },
+  },
+  // Account
+  account: {
+    changePasswordTitle: 'Change password',
+    changePasswordIntro: 'Choose a new password for your account.',
+    firstLoginTitle: 'Set your password',
+    firstLoginIntro: 'You signed in with a temporary password. Choose your own password to continue.',
+    currentPassword: 'Current password',
+    temporaryPassword: 'Temporary password',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm new password',
+    passwordHint: 'At least 8 characters.',
+    save: 'Save password',
+    saving: 'Saving…',
+    saved: 'Your password has been changed.',
+    back: 'Back',
+    errors: {
+      unauthorized: 'Please sign in again.',
+      wrong_current: 'The current password is incorrect.',
+      too_short: 'The new password must be at least 8 characters.',
+      mismatch: 'The two new passwords do not match.',
+      same_as_current: 'The new password must be different from the current one.',
+    },
+  },
+  // Inviting users
+  invite: {
+    title: 'Invite user',
+    name: 'Full name',
+    email: 'Email address',
+    role: 'Role',
+    create: 'Create account',
+    creating: 'Creating…',
+    note: 'No email service is set up yet: you will get a one-time password to share with the person yourself.',
+    createdTitle: 'Account created',
+    createdIntro: 'Share this one-time password with {name} through a secure channel. It is shown only once, and they must replace it when they first sign in.',
+    copy: 'Copy',
+    copied: 'Copied',
+    done: 'Done',
   },
   // AI features
   ai: {

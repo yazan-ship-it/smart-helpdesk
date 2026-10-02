@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogOut, Monitor, Moon, Sun, Globe } from 'lucide-react'
+import Link from 'next/link'
+import { KeyRound, LogOut, Monitor, Moon, Sun, Globe } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { logout } from '@/app/actions/auth'
 import { useTranslation } from '@/lib/i18n'
@@ -150,7 +151,15 @@ export default function UserDropdown({ user, placement = 'bottom-end' }: Props) 
               </button>
             </div>
 
-            <div className="p-1.5 border-t border-border">
+            <div className="p-1.5 border-t border-border space-y-0.5">
+              <Link
+                href="/account/password"
+                onClick={() => setIsOpen(false)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+              >
+                <KeyRound className="w-4 h-4" />
+                <span>{t('userDropdown.changePassword')}</span>
+              </Link>
               <form action={logout}>
                 <button
                   type="submit"

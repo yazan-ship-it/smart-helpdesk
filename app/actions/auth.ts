@@ -49,11 +49,13 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
     data: { lastLoginAt: new Date() },
   })
 
+  const mustChangePassword = user.accountStatus === 'INVITED'
   await createSession(
-    { userId: user.id, role: user.role as Role, name: user.name, email: user.email },
+    { userId: user.id, role: user.role as Role, name: user.name, email: user.email, mustChangePassword },
     { remember },
   )
 
+  if (mustChangePassword) redirect('/account/password')
   if (user.role === 'ADMIN') redirect('/admin/users')
   if (user.role === 'IT_SUPPORT') redirect('/tickets?queue=assigned_to_me')
   redirect('/tickets')

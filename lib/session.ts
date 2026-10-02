@@ -9,6 +9,8 @@ export type SessionPayload = {
   role: Role
   name: string
   email: string
+  /** Invited users signed in with a temporary password and must set their own first */
+  mustChangePassword?: boolean
   expiresAt: Date
 }
 
@@ -18,7 +20,7 @@ if (!secretKey) {
 }
 const encodedKey = new TextEncoder().encode(secretKey)
 
-const COOKIE_NAME = 'helpdesk-session'
+export const SESSION_COOKIE = 'helpdesk-session'
 /** "Remember me": a persistent cookie for 30 days */
 const REMEMBER_DURATION = 30 * 24 * 60 * 60 * 1000
 /** Otherwise: a browser-session cookie, and the token itself expires after a working day */
@@ -52,7 +54,7 @@ export async function createSession(
   const session = await encrypt({ ...payload, expiresAt })
   const cookieStore = await cookies()
 
-  cookieStore.set(COOKIE_NAME, session, {
+  cookieStore.set(SESSION_COOKIE, session, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     // Without "remember me" there is no expiry, so the browser drops the cookie when it closes
@@ -64,11 +66,11 @@ export async function createSession(
 
 export async function deleteSession(): Promise<void> {
   const cookieStore = await cookies()
-  cookieStore.delete(COOKIE_NAME)
+  cookieStore.delete(SESSION_COOKIE)
 }
 
 export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies()
-  const cookie = cookieStore.get(COOKIE_NAME)
+  const cookie = cookieStore.get(SESSION_COOKIE)
   return decrypt(cookie?.value)
 }

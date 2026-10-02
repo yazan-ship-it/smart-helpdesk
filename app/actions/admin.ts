@@ -1,7 +1,7 @@
 'use server'
 
-import { randomBytes } from 'crypto'
 import bcrypt from 'bcryptjs'
+import { generateTemporaryPassword } from '@/lib/passwords'
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/db'
 import { requireAdmin } from '@/app/actions/auth'
@@ -89,31 +89,37 @@ export async function updateUserRole(
 }
 
 // ─── Invite User ─────────────────────────────────────────────────────────────
-export async function inviteUser(
-  email: string,
-  role: 'EMPLOYEE' | 'IT_SUPPORT' | 'ADMIN',
-): Promise<{ error?: string, success?: boolean }> {
+const INVITE_ROLES = ['EMPLOYEE', 'IT_SUPPORT', 'ADMIN'] as const
+
+/**
+ * Create an account with a one-time password. There is no email service yet,
+ * so the password is returned once for the admin to share; the user must
+ * replace it on first sign-in.
+ */
+export async function inviteUser(input: {
+  name: string
+  email: string
+  role: (typeof INVITE_ROLES)[number]
+}): Promise<{ error?: string; tempPassword?: string }> {
   await requireAdmin()
 
-  if (!email || !email.includes('@')) {
-    return { error: 'Invalid email address.' }
-  }
+  const name = input.name?.trim()
+  const email = input.email?.trim().toLowerCase()
+  if (!name || name.length < 2) return { error: 'Please enter the name of the person.' }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Invalid email address.' }
+  if (!INVITE_ROLES.includes(input.role)) return { error: 'Invalid role.' }
 
-  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
-  if (existing) {
+  if (await prisma.user.findUnique({ where: { email } })) {
     return { error: 'A user with this email already exists.' }
   }
 
-  // Generate a random temporary password since password is required
-  const tempPassword = randomBytes(16).toString('hex')
-  const hashedPassword = await bcrypt.hash(tempPassword, 12)
-
+  const tempPassword = generateTemporaryPassword()
   await prisma.user.create({
     data: {
-      name: 'Invited User', // Placeholder name
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      role,
+      name,
+      email,
+      password: await bcrypt.hash(tempPassword, 12),
+      role: input.role,
       accountStatus: 'INVITED',
       skills: '[]',
       isAvailable: true,
@@ -121,5 +127,5 @@ export async function inviteUser(
   })
 
   revalidatePath('/admin/users')
-  return { success: true }
+  return { tempPassword }
 }

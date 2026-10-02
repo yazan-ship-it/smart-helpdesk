@@ -257,6 +257,7 @@ export const ar: TranslationDictionary = {
   },
   // User Dropdown & Status
   userDropdown: {
+    changePassword: 'تغيير كلمة المرور',
     available: 'متاح للعمل',
     away: 'غير متواجد',
     busy: 'مشغول حالياً',
@@ -364,6 +365,44 @@ export const ar: TranslationDictionary = {
       unavailable: 'الاقتراحات غير متاحة حالياً. يرجى اختيار الفئة والأولوية بنفسك.',
       disclaimer: 'قد تكون الاقتراحات خاطئة، والقرار النهائي لك.',
     },
+  },
+  // Account
+  account: {
+    changePasswordTitle: 'تغيير كلمة المرور',
+    changePasswordIntro: 'اختر كلمة مرور جديدة لحسابك.',
+    firstLoginTitle: 'عيّن كلمة المرور الخاصة بك',
+    firstLoginIntro: 'لقد سجلت الدخول بكلمة مرور مؤقتة. اختر كلمة مرور خاصة بك للمتابعة.',
+    currentPassword: 'كلمة المرور الحالية',
+    temporaryPassword: 'كلمة المرور المؤقتة',
+    newPassword: 'كلمة المرور الجديدة',
+    confirmPassword: 'تأكيد كلمة المرور الجديدة',
+    passwordHint: '8 أحرف على الأقل.',
+    save: 'حفظ كلمة المرور',
+    saving: 'جاري الحفظ…',
+    saved: 'تم تغيير كلمة المرور.',
+    back: 'رجوع',
+    errors: {
+      unauthorized: 'يرجى تسجيل الدخول مرة أخرى.',
+      wrong_current: 'كلمة المرور الحالية غير صحيحة.',
+      too_short: 'يجب أن تتكون كلمة المرور الجديدة من 8 أحرف على الأقل.',
+      mismatch: 'كلمتا المرور الجديدتان غير متطابقتين.',
+      same_as_current: 'يجب أن تختلف كلمة المرور الجديدة عن الحالية.',
+    },
+  },
+  // Inviting users
+  invite: {
+    title: 'دعوة مستخدم',
+    name: 'الاسم الكامل',
+    email: 'البريد الإلكتروني',
+    role: 'الدور',
+    create: 'إنشاء الحساب',
+    creating: 'جاري الإنشاء…',
+    note: 'لا توجد خدمة بريد إلكتروني بعد: ستحصل على كلمة مرور لمرة واحدة لتشاركها مع الشخص بنفسك.',
+    createdTitle: 'تم إنشاء الحساب',
+    createdIntro: 'شارك كلمة المرور هذه مع {name} عبر قناة آمنة. تظهر مرة واحدة فقط، ويجب عليه تغييرها عند أول تسجيل دخول.',
+    copy: 'نسخ',
+    copied: 'تم النسخ',
+    done: 'تم',
   },
   // AI features
   ai: {

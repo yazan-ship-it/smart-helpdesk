@@ -7,12 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:migrate": "prisma migrate dev --name init",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma migrate deploy && next build",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "node scripts/seed.js",
-    "db:studio": "prisma studio",
-    "db:backfill-history": "node scripts/run-ts.js scripts/backfill-history-events.ts"
+    "db:studio": "prisma studio"
   },
   "prisma": {
     "seed": "node scripts/seed.js"
@@ -49,5 +52,8 @@
     "typescript": "^5",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

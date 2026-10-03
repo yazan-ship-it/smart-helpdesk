@@ -29,18 +29,14 @@ export async function retryAfter(key: string, rule: RateLimitRule): Promise<numb
 export async function recordAttempt(key: string, rule: RateLimitRule): Promise<void> {
   const now = new Date()
   const windowOpenedAfter = new Date(now.getTime() - rule.windowMs)
-  await prisma.$transaction(async (tx) => {
-    const row = await tx.rateLimit.findUnique({ where: { key } })
-    if (row && row.windowStart > windowOpenedAfter) {
-      await tx.rateLimit.update({ where: { key }, data: { count: { increment: 1 } } })
-    } else {
-      await tx.rateLimit.upsert({
-        where: { key },
-        create: { key, count: 1, windowStart: now },
-        update: { count: 1, windowStart: now },
-      })
-    }
-  })
+  // One atomic statement, so simultaneous attempts are all counted and never collide:
+  // a new counter, +1 inside the current window, or a fresh window once it has passed
+  await prisma.$executeRaw`
+    INSERT INTO "RateLimit" ("key", "count", "windowStart") VALUES (${key}, 1, ${now})
+    ON CONFLICT ("key") DO UPDATE SET
+      "count" = CASE WHEN "RateLimit"."windowStart" > ${windowOpenedAfter} THEN "RateLimit"."count" + 1 ELSE 1 END,
+      "windowStart" = CASE WHEN "RateLimit"."windowStart" > ${windowOpenedAfter} THEN "RateLimit"."windowStart" ELSE ${now} END
+  `
   // Housekeeping: drop counters whose window ended long ago
   await prisma.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(now.getTime() - 24 * 60 * MINUTE) } } })
 }

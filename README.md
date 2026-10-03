@@ -1,7 +1,7 @@
 # Smart IT Helpdesk 🚀
 ### Enterprise IT Service Management & AI-Powered Triage Platform
 
-An enterprise-grade IT Support Ticket Management System built with **Next.js 16 (App Router)**, **TypeScript**, **Prisma ORM + SQLite**, **Tailwind CSS**, and **Google Gemini** (`gemini-2.5-flash` by default) for ticket triage suggestions, ticket summaries for IT staff, and on-demand translation.
+An enterprise-grade IT Support Ticket Management System built with **Next.js 16 (App Router)**, **TypeScript**, **Prisma ORM + PostgreSQL**, **Tailwind CSS**, and **Google Gemini** (`gemini-2.5-flash` by default) for ticket triage suggestions, ticket summaries for IT staff, and on-demand translation.
 
 ---
 
@@ -21,6 +21,7 @@ An enterprise-grade IT Support Ticket Management System built with **Next.js 16 
   - [Security](#7-security)
 - [Environment Variables](#-environment-variables)
 - [Installation & Quick Start](#-installation--quick-start)
+- [Deployment (Vercel + Neon)](#-deployment-vercel--neon)
 - [Automated Testing Suite](#-automated-testing-suite)
 - [Project Directory Structure](#-project-directory-structure)
 - [Assessment Requirements Compliance](#-assessment-requirements-compliance)
@@ -45,13 +46,14 @@ This platform solves these challenges through:
 |---|---|---|
 | **Framework** | Next.js 16.3+ (App Router) | React Server Components (RSC), Turbopack, and Server Actions |
 | **Language** | TypeScript 5 | Strict typing throughout models, APIs, and UI components |
-| **Database & ORM** | Prisma ORM + SQLite (`dev.db`) | Zero-config, ACID-compliant local database with relational schema |
+| **Database & ORM** | Prisma ORM + PostgreSQL (Neon) | Versioned migrations (`prisma/migrations`) and check constraints on roles, statuses and ratings |
 | **Authentication** | `jose` (JWT) + `bcryptjs` | Stateless encrypted HTTP-only session cookies with 12-round salt hashing |
 | **AI Engine** | Google Gemini via `@google/genai` (`gemini-2.5-flash`, falls back to `gemini-2.5-flash-lite`) | Schema-validated JSON output for triage and summaries; translation |
 | **Styling & Design** | Tailwind CSS + CSS Design Tokens | Clean typography, dark/light adaptive surfaces, and zero-border minimalism |
 | **Motion & Charts** | Framer Motion & Recharts | Micro-animations, interactive layout transitions, and queue distribution graphs |
 | **Internationalization** | Custom Context Engine + Cookies | Instant zero-reload locale toggling, bidirectional layout (`rtl`/`ltr`) |
-| **Testing** | Vitest | 139 unit and integration tests that call the real actions, pages and API routes |
+| **File Storage** | Vercel Blob (private) or local disk | Attachments are never public; `/api/files/[id]` checks who may see them |
+| **Testing & CI** | Vitest + GitHub Actions | Integration tests against a real PostgreSQL test database; lint, types, tests and build on every push |
 
 ---
 
@@ -67,6 +69,8 @@ erDiagram
     User ||--o{ TicketHistory : "triggers"
     Ticket ||--o{ Comment : "contains"
     Ticket ||--o{ TicketHistory : "audits"
+    Ticket ||--o{ Attachment : "has files"
+    User ||--o{ Attachment : "uploads"
 
     User {
         String id PK "cuid()"
@@ -90,7 +94,6 @@ erDiagram
         String category "Hardware | Network | Software | Printer..."
         String priority "LOW | MEDIUM | HIGH | CRITICAL"
         String status "OPEN | ASSIGNED | IN_PROGRESS | RESOLVED | CLOSED"
-        String attachments "JSON Array of File Metadata"
         DateTime slaDeadline "SLA Target Timestamp"
         Boolean slaBreached "Breach Status Flag"
         Int csatRating "1 to 5 Star Rating"
@@ -107,10 +110,20 @@ erDiagram
     Comment {
         String id PK "cuid()"
         String content "Message Text"
-        String attachments "JSON Array of Files"
         Boolean isInternal "Private IT Agent Note"
         String ticketId FK "Ticket.id"
         String authorId FK "User.id"
+        DateTime createdAt "Timestamp"
+    }
+
+    Attachment {
+        String id PK "cuid(); served at /api/files/id"
+        String storageKey UK "Random key in private storage"
+        String name "Original file name"
+        Int size "Bytes"
+        String type "Derived from the extension"
+        String uploadedById FK "User.id"
+        String ticketId FK "Ticket.id (null until the ticket is created)"
         DateTime createdAt "Timestamp"
     }
 
@@ -208,7 +221,7 @@ $$\mathbf{OPEN} \longrightarrow \mathbf{ASSIGNED} \longrightarrow \mathbf{IN\_PR
   - Sign-in: 5 failures lock the account for 15 minutes; 20 failures lock the client address.
   - Account requests: 5 per hour per address.
   - AI: 30 Gemini requests per user per 10 minutes. Over the limit, triage falls back to the keyword rules.
-- **Nothing from the browser is trusted:** categories must be the admin's, priorities and lengths are checked, attachments must point at files the upload API created, tickets can only be assigned to active IT staff, and a ticket can be rated once.
+- **Nothing from the browser is trusted:** categories must be the admin's, priorities and lengths are checked, a ticket can only use the requester's own uploads, tickets can only be assigned to active IT staff, and a ticket can be rated once.
 - **Concurrency:** ticket numbers can't collide (transaction + retry on the unique index), and a status change or take-over only applies if nobody changed the ticket first.
 - **No account enumeration:** the login and account request forms answer the same way whether or not an email is registered.
 - **Admins can't lock themselves out:** they cannot suspend or demote their own account.
@@ -219,73 +232,71 @@ $$\mathbf{OPEN} \longrightarrow \mathbf{ASSIGNED} \longrightarrow \mathbf{IN\_PR
 
 ## 🔐 Environment Variables
 
-Copy `.env.example` to `.env` and fill it in:
+Copy `.env.example` to `.env`; every variable is explained there.
 
-```env
-# Database Connection (SQLite local file)
-DATABASE_URL="file:./dev.db"
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | yes | PostgreSQL connection used by the app (on Neon: the **pooled** string) |
+| `DIRECT_URL` | yes | Direct connection used by migrations (on Neon: the **unpooled** string; locally the same as `DATABASE_URL`) |
+| `SESSION_SECRET` | yes | Signs the session cookie; at least 32 random characters |
+| `GEMINI_API_KEY` | no | Google Gemini for triage suggestions, summaries and translation |
+| `GEMINI_MODEL` / `GEMINI_FALLBACK_MODEL` | no | Override the models (defaults `gemini-2.5-flash` / `gemini-2.5-flash-lite`) |
+| `BLOB_READ_WRITE_TOKEN` | on Vercel | Private Vercel Blob store for attachments (set by Vercel when the store is connected) |
+| `STORAGE_DIR` | no | Local folder for attachments when there is no Blob token (default `.data/uploads`) |
+| `DEMO_MODE` | no | `true` shows 1-click logins for the seeded accounts. Never with real users |
+| `TEST_DATABASE_URL` | for tests | Separate database for `npm test`, wiped on every run; its name must end in `_test` |
 
-# Signs the session cookie: a random value of at least 32 characters, e.g.
-#   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-SESSION_SECRET="..."
-
-# Google Gemini API Key (triage suggestions, summaries, translation)
-# Get one at https://aistudio.google.com/apikey
-GEMINI_API_KEY="your-gemini-api-key-here"
-
-# Optional: override the models (e.g. when Google retires one)
-# GEMINI_MODEL="gemini-2.5-flash"
-# GEMINI_FALLBACK_MODEL="gemini-2.5-flash-lite"   # "none" to disable
-
-# 1-click demo logins for the seeded accounts (never with real users)
-DEMO_MODE="false"
-```
-
-> **Without a key** the app still works: triage suggestions come from labelled keyword rules (if enabled in Settings), and summaries/translation report that AI is not configured. Google's free tier allows only a few requests per minute per model, which is why a fallback model is used.
+> **Without a Gemini key** the app still works: triage suggestions come from labelled keyword rules (if enabled in Settings), and summaries/translation report that AI is not configured. Google's free tier allows only a few requests per minute per model, which is why a fallback model is used.
 
 ---
 
 ## 🚀 Installation & Quick Start
 
 ### 1. Prerequisites
-- **Node.js:** v18.18.0 or newer (v20+ recommended)
-- **npm:** v9.0.0 or newer
+- **Node.js** 22 or newer
+- A **PostgreSQL** database. A free [Neon](https://neon.tech) project works: use its default database for the app, and create a second one named `helpdesk_test` for the tests.
 
 ### 2. Setup Instructions
 
 ```bash
-# 1. Clone repository
-git clone <repository-url>
-cd smart-helpdesk
-
-# 2. Install dependencies
+# 1. Install dependencies (also generates the Prisma client)
 npm install
 
-# 3. Configure (then edit .env)
+# 2. Configure: database URLs, SESSION_SECRET, and GEMINI_API_KEY if you have one
 cp .env.example .env
 
-# 4. Synchronize database schema
-npx prisma db push
+# 3. Create the tables
+npm run db:deploy
 
-# 5. Populate default database seed (Users, Categories, Seed Tickets #101-#108)
-#    Warning: this deletes existing users and tickets
+# 4. Demo data: users, categories, tickets #101-#108 (deletes existing users and tickets)
 npm run db:seed
 
-# 6. Launch development server with Turbopack
+# 5. Start the app
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000).
 
-**Upgrading an existing database:** run `npx prisma db push`, then `npm run db:backfill-history` once to convert old audit-trail rows into translatable events.
+**Changing the schema:** edit `prisma/schema.prisma`, then `npm run db:migrate -- --name what_changed` creates and applies a migration. Commit it; deployments apply it with `prisma migrate deploy`.
 
 **Inviting users:** admins can invite a user from *User Management*. Until email is set up, the admin receives a one-time password to share; the user must choose their own password at first sign-in.
 
 ---
 
+## ☁️ Deployment (Vercel + Neon)
+
+1. **Database:** create a project on [Neon](https://neon.tech). Copy the *pooled* connection string (host contains `-pooler`) and add `&pgbouncer=true` to it, plus the *direct* one.
+2. **Vercel project:** import the GitHub repository on [Vercel](https://vercel.com). Vercel runs `npm run vercel-build`, which applies pending migrations and builds.
+3. **Environment variables** (Project → Settings → Environment Variables): `DATABASE_URL` (pooled), `DIRECT_URL` (direct), `SESSION_SECRET`, `GEMINI_API_KEY`, and `DEMO_MODE` if this is a demo.
+4. **Attachments:** Storage → create a **Blob** store with **private** access and connect it to the project (this sets `BLOB_READ_WRITE_TOKEN`).
+5. **Deploy**, then load the demo data once from your machine with the Neon *direct* URL: `DATABASE_URL=... npm run db:seed`.
+6. **Check:** `https://<your-app>/api/health` should answer `{"status":"ok"}`.
+
+---
+
 ## 🧪 Automated Testing Suite
 
-The repository contains an automated test suite implemented with **Vitest**. Integration tests run against the database with only the Next.js request context and the Gemini SDK stubbed; unit tests cover the AI wrapper, triage rules, skills and audit-trail events.
+The repository contains an automated test suite implemented with **Vitest**. Integration tests run against their own PostgreSQL database (`TEST_DATABASE_URL`, rebuilt from the migrations before every run, so the app's data is never touched; in CI a PostgreSQL service container) with only the Next.js request context and the Gemini SDK stubbed; unit tests cover the AI wrapper, triage rules, skills and audit-trail events.
 
 ```bash
 # Execute test suite once
@@ -467,9 +478,9 @@ npm run test:watch
 
 1. **Advisory AI:** Suggestions and summaries assist people; they never change a ticket on their own.
 2. **No email yet:** Invites show a one-time password to the admin, and password resets are done by IT.
-3. **SQLite and local file uploads:** fine for the assessment; a real deployment should use PostgreSQL and object storage. The SQLite migrations in `prisma/migrations` predate several schema changes, so set up with `prisma db push`.
-4. **Attachments are public by link:** uploaded files are served from `/public/uploads` under random, unguessable names, without a sign-in check. Moving them to private object storage is planned with the deployment work.
-5. **Behind a proxy:** per-address rate limits use `X-Forwarded-For`, so a deployment must sit behind a reverse proxy that sets it.
+3. **Attachments are limited to 4 MB each:** files go through the app server, and Vercel limits request bodies to 4.5 MB.
+4. **Behind a proxy:** per-address rate limits use `X-Forwarded-For`, so a deployment must sit behind a reverse proxy that sets it (Vercel does).
+
 ---
 
 ## 📂 Project Directory Structure
@@ -488,6 +499,8 @@ smart-helpdesk/
 │   ├── admin/                 # Administrator portal (settings, tickets, users)
 │   ├── api/                   # REST API routes
 │   │   ├── ai/                # Gemini triage and ticket summaries
+│   │   ├── files/[id]/        # Serves an attachment to those allowed to see it
+│   │   ├── health/            # Liveness check (database)
 │   │   └── upload/            # File attachments (type & size checked)
 │   ├── components/            # Shared UI (drawer, AI summary, translate button, responsive sidebar…)
 │   ├── login/                 # Sign-in page and walk-through
@@ -502,16 +515,18 @@ smart-helpdesk/
 │   ├── rate-limit.ts          # Sign-in, account request and AI limits
 │   ├── errors.ts              # Error codes shown in the user's language
 │   ├── demo.ts                # 1-click demo logins (DEMO_MODE)
+│   ├── storage.ts             # Private file storage (Vercel Blob or local disk)
 │   ├── settings.ts / skills.ts / sla.ts / uploads.ts / ticket-rules.ts
 │   └── i18n/                  # Arabic/English dictionaries and provider
 ├── prisma/
 │   ├── schema.prisma          # Database models
+│   ├── migrations/            # Versioned SQL migrations (PostgreSQL)
 │   └── seed.ts                # Demo data
 ├── proxy.ts                   # Route protection (roles, forced password change)
 ├── scripts/
 │   ├── run-ts.js              # Run TypeScript files with plain Node
-│   ├── seed.js                # npm run db:seed
-│   └── backfill-history-events.ts # One-off audit-trail conversion
+│   └── seed.js                # npm run db:seed
+├── .github/workflows/ci.yml   # Lint, types, tests (PostgreSQL) and build on every push
 ├── tests/                     # 139 Vitest tests (5 files)
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration

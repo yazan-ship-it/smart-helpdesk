@@ -24,7 +24,9 @@ const cairo = Cairo({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const appName = (await getAppSettings())?.appName?.trim() || "Smart Helpdesk";
+  // The not-found page is prerendered at build time, when there may be no database
+  const settings = await getAppSettings().catch(() => null);
+  const appName = settings?.appName?.trim() || "Smart Helpdesk";
   return {
     title: { default: appName, template: `%s | ${appName}` },
     description: "Manage and resolve IT support tickets efficiently with AI-powered triage.",

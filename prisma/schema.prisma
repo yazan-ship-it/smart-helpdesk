@@ -6,12 +6,15 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  /// Used by the app. On Neon: the pooled connection string
+  url       = env("DATABASE_URL")
+  /// Used by migrations. On Neon: the direct (unpooled) connection string
+  directUrl = env("DIRECT_URL")
 }
 
-// Note: SQLite does not support native enums.
-// We use String fields and enforce enum values in application code (TypeScript).
+// Roles, statuses and priorities are Strings validated in application code
+// (see lib/errors.ts and app/actions), which keeps them easy to extend.
 
 model User {
   id          String   @id @default(cuid())
@@ -153,7 +156,6 @@ model AppSettings {
 
   // AI & Automation
   enableAiTriage        Boolean  @default(true)
-  aiConfidenceThreshold Int      @default(70)
   fallbackHeuristicsEnabled Boolean @default(true)
 
   // Registration & Security

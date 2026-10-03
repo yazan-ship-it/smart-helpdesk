@@ -59,5 +59,7 @@ function localStorage(dir: string): FileStorage {
 
 export function getStorage(): FileStorage {
   if (process.env.BLOB_READ_WRITE_TOKEN) return blobStorage
-  return localStorage(path.resolve(process.cwd(), process.env.STORAGE_DIR || '.data/uploads'))
+  // A fixed default keeps the build from tracing the whole project into the server bundle
+  const dir = process.env.STORAGE_DIR ? path.resolve(process.env.STORAGE_DIR) : path.join(process.cwd(), '.data', 'uploads')
+  return localStorage(dir)
 }

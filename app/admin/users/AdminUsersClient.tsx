@@ -222,6 +222,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
         toast.error(t(`errors.${res.error}`, res.params))
       } else {
         toast.success(t('toasts.userUpdated'))
+        if (res.returnedTickets) toast.info(t('toasts.ticketsReturnedToQueue', { count: res.returnedTickets }))
         router.refresh()
         onClose()
       }
@@ -234,7 +235,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
         <button onClick={onClose} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground">
           <X className="w-5 h-5" />
         </button>
-        <h2 className="text-xl font-bold mb-4">{locale === 'ar' ? `تعديل المستخدم: ${user.name}` : `Edit User: ${user.name}`}</h2>
+        <h2 className="text-xl font-bold mb-4">{t('usersPage.editUser', { name: user.name })}</h2>
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1">{t('invite.role')}</label>
@@ -247,7 +248,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
           
           {role === 'IT_SUPPORT' && (
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-2">{locale === 'ar' ? 'المهارات المعينة' : 'Assigned Skills'}</label>
+              <label className="block text-xs font-semibold text-muted-foreground mb-2">{t('usersPage.assignedSkills')}</label>
               <div className="grid grid-cols-2 gap-2">
                 {categories.map(skill => (
                   <label key={skill} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -263,7 +264,7 @@ function EditUserModal({ user, categories, onClose }: { user: UserRow; categorie
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted text-muted-foreground">{t('common.cancel')}</button>
             <button type="button" onClick={handleSave} disabled={isPending} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground disabled:opacity-50">
               {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              {locale === 'ar' ? 'حفظ التغييرات' : 'Save Changes'}
+              {t('usersPage.saveChanges')}
             </button>
           </div>
         </div>
@@ -290,6 +291,7 @@ function UserTableRow({ user, categories, selected, onToggle, isSelf }: { user: 
       if (result.error) toast.error(t(`errors.${result.error}`, result.params))
       else {
         toast.success(t('toasts.userStatusUpdated'))
+        if (result.returnedTickets) toast.info(t('toasts.ticketsReturnedToQueue', { count: result.returnedTickets }))
         router.refresh()
       }
     })
@@ -358,11 +360,11 @@ function UserTableRow({ user, categories, selected, onToggle, isSelf }: { user: 
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Clock className="w-3 h-3" /> 
-            {user.lastLoginAt ? (locale === 'ar' ? `آخر دخول: ${formatRelativeTime(user.lastLoginAt, locale)}` : `Last login: ${formatRelativeTime(user.lastLoginAt, locale)}`) : (locale === 'ar' ? 'لم يسجل الدخول مسبقاً' : 'Never logged in')}
+            {user.lastLoginAt ? (t('usersPage.lastLogin', { value: formatRelativeTime(user.lastLoginAt, locale) })) : (t('usersPage.neverLoggedIn'))}
           </div>
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Activity className="w-3 h-3" />
-            {user.role === 'IT_SUPPORT' ? (locale === 'ar' ? `${user.stats.assignedTickets} منجزة` : `${user.stats.assignedTickets} resolved`) : (locale === 'ar' ? `${user.stats.createdTickets} مقدمة` : `${user.stats.createdTickets} submitted`)}
+            {user.role === 'IT_SUPPORT' ? (t('usersPage.resolved', { assignedTickets: user.stats.assignedTickets })) : (t('usersPage.submitted', { createdTickets: user.stats.createdTickets }))}
           </div>
         </div>
       </td>
@@ -476,25 +478,25 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{locale === 'ar' ? 'إدارة المستخدمين' : 'User Management'}</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{t('usersPage.userManagement')}</h1>
           <p className="text-base font-normal text-muted-foreground/90 mt-1.5">
-            {locale === 'ar' ? 'مراجعة طلبات التسجيل، وإدارة الأدوار والصلاحيات، ومتابعة نشاط الحسابات.' : 'Review registration requests, manage roles, and monitor account activity.'}
+            {t('usersPage.reviewRegistrationRequestsManageRoles')}
           </p>
         </div>
         <button onClick={() => setShowInviteModal(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm">
-          <UserPlus className="w-4 h-4" /> {locale === 'ar' ? 'دعوة مستخدم' : 'Invite User'}
+          <UserPlus className="w-4 h-4" /> {t('usersPage.inviteUser')}
         </button>
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {[
-          { label: locale === 'ar' ? 'الإجمالي' : 'Total', value: counts.total, icon: <Users className="w-4 h-4" />, color: 'text-indigo-500', bg: 'bg-indigo-500/10 border-indigo-500/20' },
-          { label: locale === 'ar' ? 'قيد المراجعة' : 'Pending', value: counts.pending, icon: <Clock className="w-4 h-4" />, color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/20' },
-          { label: locale === 'ar' ? 'موافق عليه' : 'Approved', value: counts.approved, icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-          { label: locale === 'ar' ? 'مرفوض' : 'Rejected', value: counts.rejected, icon: <XCircle className="w-4 h-4" />, color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/20' },
-          { label: locale === 'ar' ? 'معلّق' : 'Suspended', value: counts.suspended, icon: <Ban className="w-4 h-4" />, color: 'text-gray-500', bg: 'bg-gray-500/10 border-gray-500/20' },
-          { label: locale === 'ar' ? 'تمت الدعوة' : 'Invited', value: counts.invited, icon: <Mail className="w-4 h-4" />, color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/20' },
+          { label: t('usersPage.total'), value: counts.total, icon: <Users className="w-4 h-4" />, color: 'text-indigo-500', bg: 'bg-indigo-500/10 border-indigo-500/20' },
+          { label: t('usersPage.pending'), value: counts.pending, icon: <Clock className="w-4 h-4" />, color: 'text-amber-500', bg: 'bg-amber-500/10 border-amber-500/20' },
+          { label: t('usersPage.approved'), value: counts.approved, icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+          { label: t('usersPage.rejected'), value: counts.rejected, icon: <XCircle className="w-4 h-4" />, color: 'text-red-500', bg: 'bg-red-500/10 border-red-500/20' },
+          { label: t('usersPage.suspended'), value: counts.suspended, icon: <Ban className="w-4 h-4" />, color: 'text-gray-500', bg: 'bg-gray-500/10 border-gray-500/20' },
+          { label: t('usersPage.invited'), value: counts.invited, icon: <Mail className="w-4 h-4" />, color: 'text-blue-500', bg: 'bg-blue-500/10 border-blue-500/20' },
         ].map((card) => (
           <div key={card.label} className="rounded-2xl bg-card border border-border p-3 flex items-center gap-3 shadow-sm">
             <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${card.bg} ${card.color} shrink-0`}>
@@ -513,25 +515,25 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
         <div className="flex flex-wrap gap-3 flex-1 w-full lg:w-auto">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <input type="text" placeholder={locale === 'ar' ? 'البحث بالاسم أو البريد الإلكتروني...' : 'Search by name or email…'} value={search} onChange={(e) => setSearch(e.target.value)} className="w-full bg-card border border-border rounded-xl pl-9 pr-3.5 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all focus:border-indigo-500/70" />
+            <input type="text" placeholder={t('usersPage.searchByNameOrEmail')} value={search} onChange={(e) => setSearch(e.target.value)} className="w-full bg-card border border-border rounded-xl pl-9 pr-3.5 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none transition-all focus:border-indigo-500/70" />
           </div>
 
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="appearance-none bg-card border border-border rounded-xl pl-8 pr-8 py-2 text-sm text-foreground outline-none transition-all focus:border-indigo-500/70 cursor-pointer">
-              <option value="">{locale === 'ar' ? 'كافة الحالات' : 'All Statuses'}</option>
-              <option value="PENDING">{locale === 'ar' ? 'قيد المراجعة' : 'Pending'}</option>
-              <option value="APPROVED">{locale === 'ar' ? 'موافق عليه' : 'Approved'}</option>
-              <option value="REJECTED">{locale === 'ar' ? 'مرفوض' : 'Rejected'}</option>
-              <option value="SUSPENDED">{locale === 'ar' ? 'معلّق' : 'Suspended'}</option>
-              <option value="INVITED">{locale === 'ar' ? 'تمت الدعوة' : 'Invited'}</option>
+              <option value="">{t('usersPage.allStatuses')}</option>
+              <option value="PENDING">{t('usersPage.pending')}</option>
+              <option value="APPROVED">{t('usersPage.approved')}</option>
+              <option value="REJECTED">{t('usersPage.rejected')}</option>
+              <option value="SUSPENDED">{t('usersPage.suspended')}</option>
+              <option value="INVITED">{t('usersPage.invited')}</option>
             </select>
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           </div>
 
           <div className="relative">
             <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="appearance-none bg-card border border-border rounded-xl pl-3.5 pr-8 py-2 text-sm text-foreground outline-none transition-all focus:border-indigo-500/70 cursor-pointer">
-              <option value="">{locale === 'ar' ? 'كافة الأدوار' : 'All Roles'}</option>
+              <option value="">{t('usersPage.allRoles')}</option>
               {(['EMPLOYEE', 'IT_SUPPORT', 'ADMIN'] as const).map((r) => (
                 <option key={r} value={r}>{getRoleLabel(r, locale)}</option>
               ))}
@@ -543,13 +545,13 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
         {/* Bulk Actions Panel */}
         {selectedIds.size > 0 && (
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3 bg-indigo-500/10 border border-indigo-500/20 px-4 py-1.5 rounded-xl">
-            <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-400">{selectedIds.size} {locale === 'ar' ? 'محدد' : 'selected'}</span>
+            <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-400">{selectedIds.size} {t('usersPage.selected')}</span>
             <div className="h-4 w-px bg-indigo-500/30" />
             <button onClick={() => handleBulkAction('APPROVED')} disabled={isBulkPending} className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700 disabled:opacity-50">
-              <CheckCircle2 className="w-3.5 h-3.5" /> {locale === 'ar' ? 'موافقة على الكل' : 'Approve All'}
+              <CheckCircle2 className="w-3.5 h-3.5" /> {t('usersPage.approveAll')}
             </button>
             <button onClick={() => handleBulkAction('REJECTED')} disabled={isBulkPending} className="flex items-center gap-1.5 text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50">
-              <XCircle className="w-3.5 h-3.5" /> {locale === 'ar' ? 'رفض الكل' : 'Reject All'}
+              <XCircle className="w-3.5 h-3.5" /> {t('usersPage.rejectAll')}
             </button>
           </motion.div>
         )}
@@ -571,12 +573,12 @@ export default function AdminUsersClient({ users, counts, categories, initialSta
                     title={t('ui.selectAllPending')}
                   />
                 </th>
-                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{locale === 'ar' ? 'المستخدم' : 'User'}</th>
-                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{locale === 'ar' ? 'الحالة' : 'Status'}</th>
-                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{locale === 'ar' ? 'الدور' : 'Role'}</th>
-                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{locale === 'ar' ? 'المهارات' : 'Skills'}</th>
-                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{locale === 'ar' ? 'النشاط' : 'Activity'}</th>
-                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{locale === 'ar' ? 'الإجراءات' : 'Actions'}</th>
+                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('usersPage.user')}</th>
+                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('usersPage.status')}</th>
+                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('usersPage.role')}</th>
+                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('usersPage.skills')}</th>
+                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('usersPage.activity')}</th>
+                <th className="px-4 py-3 text-sm font-medium text-muted-foreground uppercase tracking-wider">{t('usersPage.actions')}</th>
               </tr>
             </thead>
             <tbody>

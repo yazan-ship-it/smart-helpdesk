@@ -1317,3 +1317,55 @@ describe('Test 15: Review Fixes', () => {
     expect(parseCannedResponses(null)).toEqual([])
   })
 })
+
+// ────────────────────────────────────────────────────────
+// TEST 16: SLA on reopen, and tickets of agents who leave
+// ────────────────────────────────────────────────────────
+describe('Test 16: Reopened SLA & Agents Who Leave', () => {
+  it('a reopened ticket gets a fresh SLA deadline but keeps an earlier breach', async () => {
+    const past = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const ticketId = await createTestTicket(employeeId, { status: 'CLOSED', assignedToId: itSupportId, slaDeadline: past, slaBreached: true })
+    signInAs(employeeId, 'EMPLOYEE')
+    expect(await reopenTicket(ticketId, 'The printer broke again')).toEqual({})
+
+    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })
+    expect(ticket.status).toBe('IN_PROGRESS')
+    expect(ticket.slaDeadline!.getTime()).toBeGreaterThan(Date.now())
+    expect(ticket.slaBreached).toBe(true)
+  })
+
+  it.each([
+    ['suspended', () => updateUserStatus(agentId, 'SUSPENDED')],
+    ['made an employee', () => updateUserRole(agentId, 'EMPLOYEE')],
+  ])('when an agent is %s, their unfinished tickets go back to the queue', async (_label, change) => {
+    await prisma.user.update({ where: { id: agentId }, data: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' } })
+    const assigned = await createTestTicket(employeeId, { status: 'ASSIGNED', assignedToId: agentId })
+    const working = await createTestTicket(employeeId, { status: 'IN_PROGRESS', assignedToId: agentId })
+    const done = await createTestTicket(employeeId, { status: 'RESOLVED', assignedToId: agentId })
+
+    signInAs(adminId, 'ADMIN', 'Test Admin')
+    expect(await change()).toEqual({ returnedTickets: 2 })
+
+    for (const id of [assigned, working]) {
+      expect(await prisma.ticket.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: 'OPEN', assignedToId: null })
+      const entry = await prisma.ticketHistory.findFirstOrThrow({ where: { ticketId: id, event: 'returned_to_queue' } })
+      expect(entry).toMatchObject({ userId: adminId, meta: JSON.stringify({ agent: 'Leaving Agent' }) })
+    }
+    // Finished work keeps its agent
+    expect(await prisma.ticket.findUniqueOrThrow({ where: { id: done } })).toMatchObject({ status: 'RESOLVED', assignedToId: agentId })
+  })
+
+  it('approving or keeping an agent does not touch their tickets', async () => {
+    await prisma.user.update({ where: { id: agentId }, data: { role: 'IT_SUPPORT', accountStatus: 'SUSPENDED' } })
+    const ticketId = await createTestTicket(employeeId, { status: 'ASSIGNED', assignedToId: agentId })
+    signInAs(adminId, 'ADMIN', 'Test Admin')
+    expect(await updateUserStatus(agentId, 'APPROVED')).toEqual({})
+    expect(await updateUserRole(agentId, 'IT_SUPPORT')).toEqual({})
+    expect((await prisma.ticket.findUniqueOrThrow({ where: { id: ticketId } })).assignedToId).toBe(agentId)
+  })
+
+  let agentId: string
+  beforeAll(async () => {
+    agentId = await createUser('Leaving Agent', `test-leaving-agent-${stamp}@test.com`, 'IT_SUPPORT')
+  })
+})

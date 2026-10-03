@@ -16,9 +16,9 @@ export default function EmptyState({
   icon = <SearchX className="w-8 h-8 text-[var(--text-muted)]" />,
   children
 }: EmptyStateProps) {
-  const { locale } = useTranslation()
-  const displayTitle = title || (locale === 'ar' ? 'لا توجد تذاكر' : 'No tickets found')
-  const displayDescription = description || (locale === 'ar' ? 'جرب تعديل خيارات البحث أو الفلاتر.' : 'Try adjusting your filters or create a new ticket.')
+  const { t } = useTranslation()
+  const displayTitle = title || (t('emptyState.noTicketsFound'))
+  const displayDescription = description || (t('emptyState.tryAdjustingYourFiltersOr'))
 
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center border border-dashed border-[var(--border)] rounded-xl" style={{ background: 'var(--bg-surface)' }}>

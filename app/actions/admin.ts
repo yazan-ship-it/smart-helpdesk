@@ -8,14 +8,49 @@ import { requireAdmin } from '@/app/actions/auth'
 import { getAppSettings, parseCategories } from '@/lib/settings'
 import { sanitizeSkills } from '@/lib/skills'
 import { fail, type ActionResult } from '@/lib/errors'
+import { historyData } from '@/lib/history'
+import type { Prisma } from '@prisma/client'
 
 export type AccountStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const NAME_MAX = 100
 
+/** Result of a change that may have freed up an agent's tickets */
+export type UserChangeResult = ActionResult & { returnedTickets?: number }
+
+/**
+ * An agent who is suspended (or no longer IT support) can't work their tickets,
+ * so the unfinished ones go back to the unassigned queue for someone else.
+ * Returns how many tickets were moved.
+ */
+async function returnTicketsToQueue(
+  tx: Prisma.TransactionClient,
+  agent: { id: string; name: string },
+  adminId: string,
+  adminName: string,
+): Promise<number> {
+  const open = await tx.ticket.findMany({
+    where: { assignedToId: agent.id, status: { notIn: ['RESOLVED', 'CLOSED'] } },
+    select: { id: true },
+  })
+  if (open.length === 0) return 0
+  await tx.ticket.updateMany({
+    where: { id: { in: open.map((t) => t.id) } },
+    data: { assignedToId: null, status: 'OPEN' },
+  })
+  await tx.ticketHistory.createMany({
+    data: open.map((t) => ({
+      ticketId: t.id,
+      userId: adminId,
+      ...historyData({ type: 'returned_to_queue', agent: agent.name }, adminName),
+    })),
+  })
+  return open.length
+}
+
 // ─── Update User Account Status (Approve / Reject / Suspend) ────────────────────────────
-export async function updateUserStatus(userId: string, status: AccountStatus): Promise<ActionResult> {
+export async function updateUserStatus(userId: string, status: AccountStatus): Promise<UserChangeResult> {
   const admin = await requireAdmin()
 
   if (!['APPROVED', 'REJECTED', 'PENDING', 'SUSPENDED'].includes(status)) return fail('invalid_status')
@@ -25,13 +60,14 @@ export async function updateUserStatus(userId: string, status: AccountStatus): P
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return fail('not_found')
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: { accountStatus: status },
+  const returnedTickets = await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { accountStatus: status } })
+    return status === 'APPROVED' ? 0 : returnTicketsToQueue(tx, user, admin.userId, admin.name)
   })
 
   revalidatePath('/admin/users')
-  return {}
+  revalidatePath('/tickets')
+  return returnedTickets ? { returnedTickets } : {}
 }
 
 // ─── Bulk Update User Account Status ──────────────────────────────────────────
@@ -56,7 +92,7 @@ export async function updateUserRole(
   userId: string,
   role: 'EMPLOYEE' | 'IT_SUPPORT' | 'ADMIN',
   skills: string[] = [],
-): Promise<ActionResult> {
+): Promise<UserChangeResult> {
   const admin = await requireAdmin()
 
   if (!['EMPLOYEE', 'IT_SUPPORT', 'ADMIN'].includes(role)) return fail('invalid_role')
@@ -71,13 +107,14 @@ export async function updateUserRole(
     skills: role === 'IT_SUPPORT' ? JSON.stringify(sanitizeSkills(skills, parseCategories((await getAppSettings())?.categoriesList))) : '[]',
   }
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: dataToUpdate,
+  const returnedTickets = await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: dataToUpdate })
+    return role === 'IT_SUPPORT' ? 0 : returnTicketsToQueue(tx, user, admin.userId, admin.name)
   })
 
   revalidatePath('/admin/users')
-  return {}
+  revalidatePath('/tickets')
+  return returnedTickets ? { returnedTickets } : {}
 }
 
 // ─── Invite User ─────────────────────────────────────────────────────────────

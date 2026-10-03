@@ -11,7 +11,7 @@ export default function SettingsError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
-  const { locale } = useTranslation()
+  const { t } = useTranslation()
 
   useEffect(() => {
     console.error(error)
@@ -23,16 +23,16 @@ export default function SettingsError({
         <AlertTriangle className="w-6 h-6" />
       </div>
       <h2 className="text-xl font-bold text-foreground">
-        {locale === 'ar' ? 'حدث خطأ غير متوقع!' : 'Something went wrong!'}
+        {t('settingsError.somethingWentWrong')}
       </h2>
       <p className="text-muted-foreground text-sm">
-        {locale === 'ar' ? 'فشل تحميل بيانات الإعدادات.' : 'Failed to load settings data.'}
+        {t('settingsError.failedToLoadSettingsData')}
       </p>
       <button
         onClick={() => reset()}
         className="btn btn-primary"
       >
-        {locale === 'ar' ? 'إعادة المحاولة' : 'Try again'}
+        {t('settingsError.tryAgain')}
       </button>
     </div>
   )

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { createTranslator } from '@/lib/i18n/translate'
 import { getSession } from '@/lib/session'
 import { cookies } from 'next/headers'
 import { LifeBuoy, Shield, Zap, Database } from 'lucide-react'
@@ -17,6 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await getSession()
   const cookieStore = await cookies()
   const locale = (cookieStore.get('helpdesk-lang')?.value === 'ar' ? 'ar' : 'en') as 'en' | 'ar'
+  const t = createTranslator(locale)
 
   if (!session || session.role !== 'ADMIN') {
     redirect('/login')
@@ -67,7 +69,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               {brandName}
             </p>
             <p className="text-[10px] text-muted-foreground truncate whitespace-nowrap">
-              {locale === 'ar' ? 'لوحة تحكم المدير' : 'Admin Console'}
+              {t('adminLayout.adminConsole')}
             </p>
           </div>
         </div>
@@ -87,18 +89,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <Database className={`w-3.5 h-3.5 shrink-0 ${dbOk ? 'text-emerald-500' : 'text-red-500'}`} />
               <span className="text-muted-foreground font-medium">
                 {dbOk
-                  ? locale === 'ar' ? `قاعدة البيانات: متصلة (${dbLatencyMs} ms)` : `Database: connected (${dbLatencyMs} ms)`
-                  : locale === 'ar' ? 'قاعدة البيانات: لا يوجد اتصال' : 'Database: unreachable'}
+                  ? t('adminLayout.databaseConnectedMs', { dbLatencyMs })
+                  : t('adminLayout.databaseUnreachable')}
               </span>
             </div>
             <div className="flex items-center gap-2">
               <Zap className={`w-3.5 h-3.5 shrink-0 ${aiState === 'configured' ? 'text-amber-500' : 'text-muted-foreground'}`} />
               <span className="text-muted-foreground font-medium">
                 {aiState === 'configured'
-                  ? locale === 'ar' ? 'الذكاء الاصطناعي: مفعّل' : 'AI: configured'
+                  ? t('adminLayout.aiConfigured')
                   : aiState === 'disabled'
-                    ? locale === 'ar' ? 'الذكاء الاصطناعي: معطّل من الإعدادات' : 'AI: turned off in Settings'
-                    : locale === 'ar' ? 'الذكاء الاصطناعي: لا يوجد مفتاح API' : 'AI: no API key set'}
+                    ? t('adminLayout.aiTurnedOffInSettings')
+                    : t('adminLayout.aiNoApiKeySet')}
               </span>
             </div>
           </div>
@@ -117,7 +119,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-indigo-500" />
             <span className="text-sm font-semibold text-foreground">
-              {locale === 'ar' ? 'لوحة تحكم المدير' : 'Admin Console'}
+              {t('adminLayout.adminConsole')}
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-mono font-medium">
               {getRoleLabel('ADMIN', locale)}

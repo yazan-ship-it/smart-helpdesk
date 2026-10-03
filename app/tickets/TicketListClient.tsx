@@ -357,12 +357,12 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
 
  // Chart data
  const chartData = useMemo(() => [
-  { name: locale === 'ar' ? 'مفتوحة' : 'Open', count: stats.open, fill: STATUS_CHART_COLORS.OPEN },
-  { name: locale === 'ar' ? 'مسندة' : 'Assigned', count: stats.assigned, fill: STATUS_CHART_COLORS.ASSIGNED },
-  { name: locale === 'ar' ? 'قيد العمل' : 'In Progress', count: stats.inProgress, fill: STATUS_CHART_COLORS.IN_PROGRESS },
-  { name: locale === 'ar' ? 'تم الحل' : 'Resolved', count: stats.resolved, fill: STATUS_CHART_COLORS.RESOLVED },
-  { name: locale === 'ar' ? 'مغلقة' : 'Closed', count: stats.closed, fill: STATUS_CHART_COLORS.CLOSED },
-  ], [stats, locale])
+  { name: t('ticketList.open'), count: stats.open, fill: STATUS_CHART_COLORS.OPEN },
+  { name: t('ticketList.assigned'), count: stats.assigned, fill: STATUS_CHART_COLORS.ASSIGNED },
+  { name: t('ticketList.inProgress'), count: stats.inProgress, fill: STATUS_CHART_COLORS.IN_PROGRESS },
+  { name: t('ticketList.resolved'), count: stats.resolved, fill: STATUS_CHART_COLORS.RESOLVED },
+  { name: t('ticketList.closed'), count: stats.closed, fill: STATUS_CHART_COLORS.CLOSED },
+  ], [stats, t])
 
 
 
@@ -373,7 +373,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  <div>
  <div className="flex items-center gap-2.5 mb-1.5">
  <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
- {isAdminView ? t('nav.allTickets') : (role === 'IT_SUPPORT' ? (locale === 'ar' ? 'قائمة العمليات والدعم' : 'Support Operations Queue') : (locale === 'ar' ? 'تذاكر الدعم الخاصة بي' : 'My Support Tickets'))}
+ {isAdminView ? t('nav.allTickets') : (role === 'IT_SUPPORT' ? (t('ticketList.supportOperationsQueue')) : (t('ticketList.mySupportTickets')))}
  </h1>
  <span
  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-medium"
@@ -384,21 +384,21 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  }}
  >
  <span className="w-1.5 h-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950 animate-pulse" />
- {locale === 'ar' ? 'تحديث تلقائي' : 'Auto-refresh'}
+ {t('ticketList.autoRefresh')}
  </span>
  {stats.critical > 0 && (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800/50">
       <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
-      {stats.critical} {locale === 'ar' ? 'حرجة' : 'Critical'}
+      {stats.critical} {t('ticketList.critical')}
     </span>
  )}
  </div>
  <p className="text-base font-normal text-muted-foreground/90 mt-1.5">
           {isAdminView
-            ? (locale === 'ar' ? 'إدارة ومتابعة كافة بلاغات الدعم الفني للمؤسسة.' : 'Manage and oversee all enterprise helpdesk requests.')
+            ? (t('ticketList.manageAndOverseeAllEnterprise'))
             : (role === 'IT_SUPPORT'
-              ? (locale === 'ar' ? 'فرز وتعيين وحل طلبات الدعم الفني للمؤسسة.' : 'Triage, assign, and resolve enterprise helpdesk requests.')
-              : (locale === 'ar' ? 'تابع حالة بلاغاتك وردود فريق الدعم الفني.' : 'Track the status of your requests and replies from IT support.'))}
+              ? (t('ticketList.triageAssignAndResolveEnterprise'))
+              : (t('ticketList.trackTheStatusOfYour')))}
         </p>
  </div>
 
@@ -477,7 +477,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
  {/* Total */}
  <StatCard
- label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'إجمالي تذاكري' : 'My Total') : t('kpis.totalTickets')}
+ label={role === 'EMPLOYEE' ? (t('ticketList.myTotal')) : t('kpis.totalTickets')}
  value={stats.total}
  icon={<Inbox className="w-4 h-4" />}
  iconBg="var(--brand-muted)"
@@ -485,7 +485,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  />
  {/* Open */}
  <StatCard
- label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'تذاكري المفتوحة' : 'My Open') : t('statuses.OPEN')}
+ label={role === 'EMPLOYEE' ? (t('ticketList.myOpen')) : t('statuses.OPEN')}
  value={stats.open}
  icon={<Ticket className="w-4 h-4" />}
  iconBg="rgba(245,158,11,0.12)"
@@ -494,7 +494,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  />
  {/* In Progress */}
 				<StatCard
-					label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'قيد العمل' : 'My In Progress') : t('statuses.IN_PROGRESS')}
+					label={role === 'EMPLOYEE' ? (t('ticketList.myInProgress')) : t('statuses.IN_PROGRESS')}
 					value={stats.inProgress}
 					icon={<Activity className="w-4 h-4" />}
 					iconBg="rgba(59,130,246,0.12)"
@@ -503,7 +503,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
 				/>
 				{/* Resolved */}
 				<StatCard
-					label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'تم الحل' : 'My Resolved') : t('statuses.RESOLVED')}
+					label={role === 'EMPLOYEE' ? (t('ticketList.myResolved')) : t('statuses.RESOLVED')}
 					value={stats.resolved}
 					icon={<CheckCircle2 className="w-4 h-4" />}
 					iconBg="rgba(34,197,94,0.12)"
@@ -512,7 +512,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
 				/>
 				{/* Closed */}
 				<StatCard
-					label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'تذاكري المغلقة' : 'My Closed') : t('statuses.CLOSED')}
+					label={role === 'EMPLOYEE' ? (t('ticketList.myClosed')) : t('statuses.CLOSED')}
 					value={stats.closed}
 					icon={<CheckCircle2 className="w-4 h-4" />}
 					iconBg="rgba(161,161,170,0.12)"
@@ -521,7 +521,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
 				/>
 				{/* Critical */}
 				<StatCard
-					label={role === 'EMPLOYEE' ? (locale === 'ar' ? 'حرجة' : 'My Critical') : (locale === 'ar' ? 'حرجة' : 'Critical')}
+					label={role === 'EMPLOYEE' ? (t('ticketList.myCritical')) : (t('ticketList.critical'))}
 					value={stats.critical}
 					icon={<AlertTriangle className="w-4 h-4" />}
 					iconBg="rgba(239,68,68,0.12)"
@@ -540,10 +540,10 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  <div className="flex items-center gap-2 mb-4">
  <BarChart2 className="w-4 h-4" style={{ color: 'var(--brand)' }} />
  <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
- {locale === 'ar' ? 'التذاكر حسب الحالة' : 'Tickets by Status'}
+ {t('ticketList.ticketsByStatus')}
  </h2>
  <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
- {tickets.length} {locale === 'ar' ? 'إجمالي' : 'total'}
+ {tickets.length} {t('ticketList.total')}
  </span>
  </div>
  <div style={{ height: 140 }}>
@@ -595,7 +595,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  type="text"
  value={search}
  onChange={(e) => setSearch(e.target.value)}
- placeholder={locale === 'ar' ? 'البحث بالعنوان، رقم التذكرة، مقدم الطلب...' : 'Search by title, ticket ID, requester…'}
+ placeholder={t('ticketList.searchByTitleTicketId')}
  className="w-full bg-transparent text-sm outline-none border-0 ring-0 py-2.5"
  style={{ color: 'var(--text-primary)' }}
  />
@@ -621,7 +621,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  }}
  >
  <Filter className="w-3.5 h-3.5" />
-					{locale === 'ar' ? 'الفلاتر' : 'Filters'}
+					{t('ticketList.filters')}
  {activeFiltersCount > 0 && (
  <span
  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center text-foreground"
@@ -639,7 +639,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  style={{ color: 'var(--text-muted)' }}
  >
  <XCircle className="w-3.5 h-3.5" />
-					{locale === 'ar' ? 'مسح' : 'Clear'}
+					{t('ticketList.clear')}
  </button>
  )}
  </div>
@@ -665,7 +665,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  color: 'var(--brand)',
  } : undefined}
  >
- {f.value ? getStatusLabel(f.value, locale) : (locale === 'ar' ? 'الكل' : 'All')}
+ {f.value ? getStatusLabel(f.value, locale) : (t('ticketList.all'))}
  <span
  className="text-[10px] font-mono px-1 py-0.5 rounded-full"
  style={{
@@ -713,7 +713,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  color: 'var(--brand)',
  } : undefined}
  >
- {f.value ? getPriorityLabel(f.value, locale) : (locale === 'ar' ? 'الكل' : 'All')}
+ {f.value ? getPriorityLabel(f.value, locale) : (t('ticketList.all'))}
  </button>
  ))}
  </div>
@@ -735,7 +735,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  color: 'var(--brand)',
  } : undefined}
  >
- {locale === 'ar' ? 'الكل' : 'All'}
+ {t('ticketList.all')}
  </button>
  {CATEGORIES.map((cat) => (
  <button
@@ -758,7 +758,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  {/* Assigned Agent filter */}
  {isAdminView && agents && agents.length > 0 && (
  <div>
- <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-primary)' }}>{locale === 'ar' ? 'الموظف المسند إليه' : 'Assigned Agent'}</p>
+ <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-primary)' }}>{t('ticketList.assignedAgent')}</p>
  <div className="flex flex-wrap gap-1.5">
  <button
  type="button"
@@ -781,7 +781,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  borderColor: 'var(--border-focus)',
  color: 'var(--brand)',
  } : undefined}
- >{locale === 'ar' ? 'غير مسندة' : 'Unassigned'}</button>
+ >{t('ticketList.unassigned')}</button>
  {agents.map((ag) => (
  <button
  key={ag.id}
@@ -803,7 +803,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
 
  {/* Date Range filter */}
  <div>
- <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-primary)' }}>{locale === 'ar' ? 'النطاق الزمني' : 'Date Range'}</p>
+ <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-primary)' }}>{t('ticketList.dateRange')}</p>
  <div className="flex flex-wrap gap-1.5">
  {['all', 'today', 'week', 'month'].map((range) => (
  <button
@@ -849,9 +849,9 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
       <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center mb-5">
         <Sparkles className="w-8 h-8 text-indigo-500" />
       </div>
-      <h3 className="text-2xl font-bold text-foreground mb-2">{locale === 'ar' ? 'كافة الأنظمة تعمل بكفاءة!' : 'All systems operational!'}</h3>
+      <h3 className="text-2xl font-bold text-foreground mb-2">{t('ticketList.allSystemsOperational')}</h3>
       <p className="text-base text-muted-foreground max-w-md mb-8">
-        {locale === 'ar' ? 'ليس لديك أي تذاكر دعم مفتوحة حالياً. هل تحتاج مساعدة في الأجهزة أو البرامج أو الشبكات؟' : "You don't have any open support tickets right now. Need help with hardware, software, or network access?"}
+        {t('ticketList.youDonTHaveAny')}
       </p>
       <Link href="/tickets/new" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
         <Plus className="w-5 h-5" />
@@ -860,8 +860,8 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
     </div>
   ) : (
     <EmptyState
-    title={search || statusFilter || priorityFilter || categoryFilter ? (locale === 'ar' ? 'لا توجد تذاكر تطابق الفلاتر المحددة' : 'No tickets match your active filters') : (locale === 'ar' ? 'لا توجد تذاكر في هذه القائمة' : 'No tickets in this queue')}
-    description={search || statusFilter || priorityFilter || categoryFilter ? (locale === 'ar' ? 'جرب إعادة تعيين الفلاتر أو تعديل عبارة البحث.' : 'Try clearing filters or adjusting your search query.') : (locale === 'ar' ? 'تم حل أو تصنيف كافة البلاغات بنجاح.' : 'All enterprise issues have been resolved or triaged.')}
+    title={search || statusFilter || priorityFilter || categoryFilter ? (t('ticketList.noTicketsMatchYourActive')) : (t('ticketList.noTicketsInThisQueue'))}
+    description={search || statusFilter || priorityFilter || categoryFilter ? (t('ticketList.tryClearingFiltersOrAdjusting')) : (t('ticketList.allEnterpriseIssuesHaveBeen'))}
     icon={<Inbox className="w-8 h-8 text-[var(--text-muted)]" />}
     >
     {(search || statusFilter || priorityFilter || categoryFilter) && (
@@ -870,7 +870,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
     onClick={clearAllFilters}
     className="btn btn-secondary btn-sm inline-flex"
     >
-    {locale === 'ar' ? 'إعادة ضبط كافة الفلاتر' : 'Clear all filters'}
+    {t('ticketList.clearAllFilters')}
     </button>
     )}
     </EmptyState>
@@ -944,7 +944,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
             {ticket.assignedTo ? getInitials(ticket.assignedTo.name) : '?'}
           </div>
           <span className="text-xs font-medium text-muted-foreground">
-            {ticket.assignedTo ? ticket.assignedTo.name : (locale === 'ar' ? 'جاري الفرز والتوجيه...' : 'Being triaged...')}
+            {ticket.assignedTo ? ticket.assignedTo.name : (t('ticketList.beingTriaged'))}
           </span>
         </div>
         <span className={statusBadgeClass(ticket.status)}>
@@ -1094,7 +1094,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
    
    return (
      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isOverdue ? 'bg-red-500/10 text-red-500 border border-red-500/20' : isApproaching ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'}`}>
-       {isOverdue ? (locale === 'ar' ? 'متأخر' : 'Overdue') : (locale === 'ar' ? `متبقي ${hoursLeft}س` : `Due in ${hoursLeft}h`)}
+       {isOverdue ? (t('ticketList.overdue')) : (t('ticketList.dueInH', { hoursLeft }))}
      </span>
    )
   })()}

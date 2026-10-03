@@ -1,9 +1,12 @@
+import { createTranslator } from '@/lib/i18n/translate'
+
 export function formatRelativeTime(dateStr: string | Date, locale: 'en' | 'ar' = 'en'): string {
+  const t = createTranslator(locale)
   const date = new Date(dateStr)
   const now = new Date()
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
   
-  if (diffInSeconds < 60) return locale === 'ar' ? 'الآن' : 'Just now'
+  if (diffInSeconds < 60) return t('time.justNow')
   
   const diffInMinutes = Math.floor(diffInSeconds / 60)
   const rtf = new Intl.RelativeTimeFormat(locale === 'ar' ? 'ar' : 'en', { numeric: 'auto' })
@@ -24,7 +27,7 @@ export function formatRelativeTime(dateStr: string | Date, locale: 'en' | 'ar' =
   const timeString = date.toLocaleTimeString(locale === 'ar' ? 'ar-EG' : 'en-US', { hour: 'numeric', minute: '2-digit' })
   
   if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear()) {
-    return locale === 'ar' ? `أمس في ${timeString}` : `Yesterday at ${timeString}`
+    return t('time.yesterdayAt', { timeString })
   }
   
   const diffInDays = Math.floor(diffInHours / 24)
@@ -32,7 +35,7 @@ export function formatRelativeTime(dateStr: string | Date, locale: 'en' | 'ar' =
     return rtf.format(-diffInDays, 'day')
   }
   
-  return date.toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined }) + (locale === 'ar' ? ` في ${timeString}` : ` at ${timeString}`)
+  return date.toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined }) + (t('time.at', { timeString }))
 }
 
 /** The one display format for ticket numbers, e.g. 105 → "TICK-105". */

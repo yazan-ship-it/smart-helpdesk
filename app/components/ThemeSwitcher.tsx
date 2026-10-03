@@ -55,7 +55,7 @@ export default function ThemeSwitcher({ placement = 'top' }: { placement?: 'top'
       <button
         onClick={() => setOpen((o) => !o)}
         className="btn btn-ghost btn-icon"
-        title={locale === 'ar' ? 'المظهر وتخصيص الألوان' : 'Theme & Appearance'}
+        title={t('themeSwitcher.themeAppearance')}
         aria-label={t('ui.openThemeSwitcher')}
       >
         <Palette
@@ -76,7 +76,7 @@ export default function ThemeSwitcher({ placement = 'top' }: { placement?: 'top'
             className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-1"
             style={{ color: 'var(--text-xmuted)' }}
           >
-            {locale === 'ar' ? 'المظهر' : 'Appearance'}
+            {t('themeSwitcher.appearance')}
           </p>
           <div className="grid grid-cols-3 gap-1 mb-3">
             {MODE_OPTIONS.map(({ value, labelEn, labelAr, icon: Icon }) => (
@@ -105,7 +105,7 @@ export default function ThemeSwitcher({ placement = 'top' }: { placement?: 'top'
             className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-1"
             style={{ color: 'var(--text-xmuted)' }}
           >
-            {locale === 'ar' ? 'لون التمييز' : 'Accent Color'}
+            {t('themeSwitcher.accentColor')}
           </p>
           <div className="space-y-1">
             {ACCENT_OPTIONS.map(({ value, labelEn, labelAr, color }) => (

@@ -6,7 +6,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { getSession } from '@/lib/session'
 import { resolveAutoAssignment, type DispatchResult } from '@/lib/services/assignment'
-import { calculateBusinessHoursDeadline, statusChangeFields } from '@/lib/sla'
+import { slaDeadlineFor, statusChangeFields } from '@/lib/sla'
 import { historyData } from '@/lib/history'
 import { PRIORITIES, type Priority } from '@/lib/ai/triage'
 import { parseCategories } from '@/lib/settings'
@@ -96,30 +96,7 @@ export async function createTicket(prevState: TicketState, formData: FormData): 
     dispatch = await resolveAutoAssignment(category)
   }
 
-  // SLA Calculation
-  let slaHours = settings?.slaMediumHours ?? 48
-  if (priority === 'CRITICAL') slaHours = settings?.slaCriticalHours ?? 4
-  else if (priority === 'HIGH') slaHours = settings?.slaHighHours ?? 24
-  else if (priority === 'LOW') slaHours = settings?.slaLowHours ?? 72
-
-  const workDaysArray = JSON.parse(settings?.workDays ?? '["Sunday","Monday","Tuesday","Wednesday","Thursday"]')
-  const dayMap: Record<string, number> = { "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6 }
-  const workDaysNumbers = workDaysArray.map((d: string) => dayMap[d])
-  const [startHour, startMinute] = (settings?.businessHoursStart ?? "09:00").split(':').map(Number)
-  const [endHour, endMinute] = (settings?.businessHoursEnd ?? "17:00").split(':').map(Number)
-
-  const slaDeadline = calculateBusinessHoursDeadline(
-    new Date(),
-    slaHours,
-    {
-      startHour,
-      startMinute,
-      endHour,
-      endMinute,
-      workDays: workDaysNumbers,
-      pauseOnWeekends: settings?.pauseSlaOnWeekends ?? true
-    }
-  )
+  const slaDeadline = slaDeadlineFor(priority, settings)
 
   // The ticket and its audit entries are written together. Two tickets created at the
   // same moment can pick the same number; the unique index rejects one, which retries.
@@ -487,12 +464,15 @@ export async function reopenTicket(ticketId: string, reason: string): Promise<Ac
   if (text.length > COMMENT_MAX) return fail('comment_too_long', { max: COMMENT_MAX })
 
   const newStatus = ticket.assignedToId ? 'IN_PROGRESS' : 'OPEN'
+  const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
 
   await prisma.ticket.update({
     where: { id: ticketId },
     data: {
       status: newStatus,
       ...statusChangeFields(ticket, newStatus),
+      // The reopened work gets a fresh deadline; an earlier breach stays recorded
+      slaDeadline: slaDeadlineFor(ticket.priority, settings),
     }
   })
 

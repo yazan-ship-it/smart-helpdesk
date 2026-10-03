@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import { en, type TranslationDictionary } from './locales/en'
 import { ar } from './locales/ar'
+import { createTranslator } from './translate'
 
 export type Locale = 'en' | 'ar'
 export type Direction = 'ltr' | 'rtl'
@@ -71,48 +72,8 @@ export function LanguageProvider({
 
   const dictionary = useMemo(() => dictionaries[locale], [locale])
 
-  // Translation lookup helper with dot-notation and parameter interpolation
-  const t = useCallback(
-    (path: string, paramsOrFallback?: Record<string, string | number> | string): string => {
-      const fallbackText = typeof paramsOrFallback === 'string' ? paramsOrFallback : undefined
-      const params = typeof paramsOrFallback === 'object' ? paramsOrFallback : undefined
-
-      const keys = path.split('.')
-      
-      // Helper to traverse object
-      const resolveKey = (dict: unknown): unknown => {
-        let current = dict
-        for (const k of keys) {
-          if (current && typeof current === 'object' && k in current) {
-            current = (current as Record<string, unknown>)[k]
-          } else {
-            return undefined
-          }
-        }
-        return current
-      }
-
-      let result = resolveKey(dictionary)
-      if (result === undefined && locale !== 'en') {
-        result = resolveKey(en) // fallback to English
-      }
-
-      if (typeof result !== 'string') {
-        return fallbackText || path
-      }
-
-      let text = result
-      // Parameter replacement like {count} or {name}
-      if (params) {
-        Object.entries(params).forEach(([paramKey, val]) => {
-          text = text.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(val))
-        })
-      }
-
-      return text
-    },
-    [dictionary, locale]
-  )
+  // Translation lookup (dot-notation keys, {placeholders}); shared with server code
+  const t = useMemo(() => createTranslator(locale), [locale])
 
   const value = useMemo(
     () => ({

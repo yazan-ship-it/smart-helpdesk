@@ -1,4 +1,5 @@
 import { getSession } from '@/lib/session'
+import { createTranslator } from '@/lib/i18n/translate'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/db'
@@ -13,6 +14,7 @@ export default async function SettingsPage() {
   const session = await getSession()
   const cookieStore = await cookies()
   const locale = (cookieStore.get('helpdesk-lang')?.value === 'ar' ? 'ar' : 'en') as 'en' | 'ar'
+  const t = createTranslator(locale)
 
   if (!session || session.role !== 'ADMIN') {
     redirect('/login')
@@ -42,12 +44,10 @@ export default async function SettingsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-          {locale === 'ar' ? 'الإعدادات' : 'Settings'}
+          {t('settingsPage.settings')}
         </h1>
         <p className="text-base font-normal text-muted-foreground/90 mt-1.5">
-          {locale === 'ar'
-            ? 'إدارة إعدادات النظام، القيم الافتراضية، والإشعارات'
-            : 'Manage system configurations, defaults, and notifications.'}
+          {t('settingsPage.manageSystemConfigurationsDefaultsAnd')}
         </p>
       </div>
 

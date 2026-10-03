@@ -255,12 +255,12 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
         {activeTab === 'general' && (
           <section className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
             <div className="border-b border-[var(--border)] px-6 py-4 bg-muted/10">
-              <h2 className="text-lg font-bold text-foreground">{locale === 'ar' ? 'عام والأمان' : 'General & Security'}</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">{locale === 'ar' ? 'الإعدادات الأساسية للتطبيق والأمان.' : 'Basic application configuration and security.'}</p>
+              <h2 className="text-lg font-bold text-foreground">{t('settingsPage.generalSecurity')}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{t('settingsPage.basicApplicationConfigurationAndSecurity')}</p>
             </div>
             <div className="p-6 space-y-6">
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'اسم التطبيق' : 'App Name'}</label>
+                <label className="text-sm font-semibold text-foreground">{t('settingsPage.appName')}</label>
                 <input
                   type="text"
                   name="appName"
@@ -270,7 +270,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'البريد الإلكتروني للدعم' : 'Support Email'}</label>
+                <label className="text-sm font-semibold text-foreground">{t('settingsPage.supportEmail')}</label>
                 <input
                   type="email"
                   name="supportEmail"
@@ -280,7 +280,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'نطاق الموافقة التلقائية' : 'Auto-Approve Domain'}</label>
+                <label className="text-sm font-semibold text-foreground">{t('settingsPage.autoApproveDomain')}</label>
                 <input
                   type="text"
                   name="autoApproveDomain"
@@ -289,12 +289,12 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                   placeholder="@company.com"
                   className="w-full px-3 py-2 bg-[var(--bg-base)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
                 />
-                <p className="text-xs text-muted-foreground">{locale === 'ar' ? 'المستخدمون المسجلون بهذا النطاق سيتم اعتمادهم تلقائياً.' : 'Users registering with this email domain will be automatically approved.'}</p>
+                <p className="text-xs text-muted-foreground">{t('settingsPage.usersRegisteringWithThisEmail')}</p>
               </div>
               <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-xl">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'وضع الصيانة' : 'Maintenance Mode'}</p>
-                  <p className="text-xs text-muted-foreground">{locale === 'ar' ? 'تعطيل تسجيل الدخول لغير المشرفين.' : 'Disable new logins for non-admins.'}</p>
+                  <p className="text-sm font-semibold text-foreground">{t('settingsPage.maintenanceMode')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settingsPage.disableNewLoginsForNon')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" name="maintenanceMode" checked={formData.maintenanceMode} onChange={handleChange} className="sr-only peer" />
@@ -308,14 +308,14 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
         {activeTab === 'sla' && (
           <section className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
             <div className="border-b border-[var(--border)] px-6 py-4 bg-muted/10">
-              <h2 className="text-lg font-bold text-foreground">{locale === 'ar' ? 'سياسات SLA وساعات العمل' : 'SLA Policies & Business Hours'}</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">{locale === 'ar' ? 'تحديد أوقات الاستجابة المستهدفة وساعات العمل التشغيلية.' : 'Configure target response times and operational hours.'}</p>
+              <h2 className="text-lg font-bold text-foreground">{t('settingsPage.slaPoliciesBusinessHours')}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{t('settingsPage.configureTargetResponseTimesAnd')}</p>
             </div>
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {['Critical', 'High', 'Medium', 'Low'].map((level) => (
                   <div key={level} className="space-y-1.5">
-                    <label className="text-sm font-semibold text-foreground">{getPriorityLabel(level, locale)} ({locale === 'ar' ? 'ساعات' : 'hrs'})</label>
+                    <label className="text-sm font-semibold text-foreground">{getPriorityLabel(level, locale)} ({t('settingsPage.hrs')})</label>
                     <input
                       type="number"
                       name={`sla${level}Hours`}
@@ -329,7 +329,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'بداية ساعات العمل' : 'Business Hours Start'}</label>
+                  <label className="text-sm font-semibold text-foreground">{t('settingsPage.businessHoursStart')}</label>
                   <input
                     type="time"
                     name="businessHoursStart"
@@ -339,7 +339,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'نهاية ساعات العمل' : 'Business Hours End'}</label>
+                  <label className="text-sm font-semibold text-foreground">{t('settingsPage.businessHoursEnd')}</label>
                   <input
                     type="time"
                     name="businessHoursEnd"
@@ -351,7 +351,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
               </div>
 
               <div className="space-y-3">
-                <label className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'أيام العمل الرسمية' : 'Working Days'}</label>
+                <label className="text-sm font-semibold text-foreground">{t('settingsPage.workingDays')}</label>
                 <div className="flex flex-wrap gap-2">
                   {DAYS_OF_WEEK.map(day => (
                     <button
@@ -371,8 +371,8 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
 
               <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-xl">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'إيقاف SLA مؤقتاً في عطلة نهاية الأسبوع' : 'Pause SLA on Weekends'}</p>
-                  <p className="text-xs text-muted-foreground">{locale === 'ar' ? 'تجميد عدادات اتفاقية مستوى الخدمة خارج أيام العمل الرسمية.' : 'SLA timers will freeze outside of working days.'}</p>
+                  <p className="text-sm font-semibold text-foreground">{t('settingsPage.pauseSlaOnWeekends')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settingsPage.slaTimersWillFreezeOutside')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" name="pauseSlaOnWeekends" checked={formData.pauseSlaOnWeekends} onChange={handleChange} className="sr-only peer" />
@@ -387,13 +387,13 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
           <>
             <section className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
             <div className="border-b border-[var(--border)] px-6 py-4 bg-muted/10">
-              <h2 className="text-lg font-bold text-foreground">{locale === 'ar' ? 'التصنيفات ومصفوفة مهارات الوكلاء' : 'Categories & Agent Skills Matrix'}</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">{locale === 'ar' ? 'إدارة تصنيفات التذاكر وقواعد التوزيع والمهارات.' : 'Manage ticket categories and assignment rules.'}</p>
+              <h2 className="text-lg font-bold text-foreground">{t('settingsPage.categoriesAgentSkillsMatrix')}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{t('settingsPage.manageTicketCategoriesAndAssignment')}</p>
             </div>
             <div className="p-6 space-y-6">
               
               <div className="space-y-3">
-                <label className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'تصنيفات التذاكر' : 'Ticket Categories'}</label>
+                <label className="text-sm font-semibold text-foreground">{t('settingsPage.ticketCategories')}</label>
                 <div className="flex flex-wrap gap-2">
                   {formData.categoriesList.map(cat => (
                     <div key={cat} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-sm font-medium border border-border">
@@ -409,7 +409,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                     type="text"
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder={locale === 'ar' ? 'اسم التصنيف الجديد' : 'New category name'}
+                    placeholder={t('settingsPage.newCategoryName')}
                     className="flex-1 px-3 py-2 bg-[var(--bg-base)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -418,14 +418,14 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                       }
                     }}
                   />
-                  <button onClick={handleAddCategory} className="btn btn-secondary px-4 py-2 h-auto text-sm">{locale === 'ar' ? 'إضافة' : 'Add'}</button>
+                  <button onClick={handleAddCategory} className="btn btn-secondary px-4 py-2 h-auto text-sm">{t('settingsPage.add')}</button>
                 </div>
               </div>
 
               <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-xl">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'التوزيع الآلي الشامل' : 'Global Auto-Assignment'}</p>
-                  <p className="text-xs text-muted-foreground">{locale === 'ar' ? 'توزيع التذاكر الجديدة تلقائياً على الوكلاء حسب التصنيفات والمهارات' : 'Automatically route new tickets to agents based on categories/skills.'}</p>
+                  <p className="text-sm font-semibold text-foreground">{t('settingsPage.globalAutoAssignment')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settingsPage.automaticallyRouteNewTicketsTo')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" name="autoAssignmentEnabled" checked={formData.autoAssignmentEnabled} onChange={handleChange} className="sr-only peer" />
@@ -441,13 +441,13 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
             <div className="border-b border-[var(--border)] px-6 py-4 bg-muted/10">
               <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                 <UserCog className="w-5 h-5 text-indigo-500" />
-                {locale === 'ar' ? 'مصفوفة مهارات الوكلاء' : 'Assigned Manager'}
+                {t('settingsPage.assignedManager')}
               </h2>
-              <p className="text-sm text-muted-foreground mt-0.5">{locale === 'ar' ? 'تعيين تصنيفات محددة لأخصائيي الدعم الفني لتوجيه البلاغات تلقائياً.' : 'Assign specific categories to your IT Support agents for routing.'}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{t('settingsPage.assignSpecificCategoriesToYour')}</p>
             </div>
             <div className="divide-y divide-border">
               {localAgents.length === 0 ? (
-                <div className="p-8 text-center text-sm text-muted-foreground">{locale === 'ar' ? 'لم يتم العثور على أخصائيي دعم فني.' : 'No IT Support agents found.'}</div>
+                <div className="p-8 text-center text-sm text-muted-foreground">{t('settingsPage.noItSupportAgentsFound')}</div>
               ) : (
                 localAgents.map(agent => (
                   <div key={agent.id} className="p-6 space-y-3">
@@ -488,7 +488,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
                         )
                       })}
                       {formData.categoriesList.length === 0 && (
-                        <p className="text-xs text-muted-foreground italic">{locale === 'ar' ? 'أضف التصنيفات أعلاه أولاً.' : 'Add categories above first.'}</p>
+                        <p className="text-xs text-muted-foreground italic">{t('settingsPage.addCategoriesAboveFirst')}</p>
                       )}
                     </div>
                   </div>
@@ -502,15 +502,15 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
         {activeTab === 'ai' && (
           <section className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
             <div className="border-b border-[var(--border)] px-6 py-4 bg-muted/10">
-              <h2 className="text-lg font-bold text-foreground">{locale === 'ar' ? 'الذكاء الاصطناعي والمساعد الذكي' : 'AI & Copilot'}</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">{locale === 'ar' ? 'تهيئة ميزات الأتمتة المدعومة بنموذج Gemini.' : 'Configure Gemini-powered automation features.'}</p>
+              <h2 className="text-lg font-bold text-foreground">{t('settingsPage.aiCopilot')}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{t('settingsPage.configureGeminiPoweredAutomationFeatures')}</p>
             </div>
             <div className="p-6 space-y-6">
               
               <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-xl">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'تفعيل الفرز والتشخيص الذكي' : 'Enable AI Triage'}</p>
-                  <p className="text-xs text-muted-foreground">{locale === 'ar' ? 'استخدام الذكاء الاصطناعي لاقتراح الأولويات والتصنيفات تلقائياً.' : 'Use AI to automatically suggest priorities and categories for new tickets.'}</p>
+                  <p className="text-sm font-semibold text-foreground">{t('settingsPage.enableAiTriage')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settingsPage.useAiToAutomaticallySuggest')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" name="enableAiTriage" checked={formData.enableAiTriage} onChange={handleChange} className="sr-only peer" />
@@ -520,8 +520,8 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
 
               <div className="flex items-center justify-between p-4 bg-muted/20 border border-border rounded-xl">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-semibold text-foreground">{locale === 'ar' ? 'القواعد الاستدلالية البديلة' : 'Fallback Heuristics'}</p>
-                  <p className="text-xs text-muted-foreground">{locale === 'ar' ? 'الاعتماد على الكلمات المفتاحية في حال عدم توفر خدمة الذكاء الاصطناعي.' : 'Fall back to keyword-based routing if the AI API is unavailable.'}</p>
+                  <p className="text-sm font-semibold text-foreground">{t('settingsPage.fallbackHeuristics')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settingsPage.fallBackToKeywordBased')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" name="fallbackHeuristicsEnabled" checked={formData.fallbackHeuristicsEnabled} onChange={handleChange} className="sr-only peer" />
@@ -537,17 +537,17 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
           <section className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
             <div className="border-b border-[var(--border)] px-6 py-4 bg-muted/10 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-foreground">{locale === 'ar' ? 'إدارة الردود الجاهزة' : 'Canned Responses Manager'}</h2>
-                <p className="text-sm text-muted-foreground mt-0.5">{locale === 'ar' ? 'قوالب ردود جاهزة ومعدة مسبقاً للمشاكل المتكررة.' : 'Pre-written reply templates for common issues.'}</p>
+                <h2 className="text-lg font-bold text-foreground">{t('settingsPage.cannedResponsesManager')}</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">{t('settingsPage.preWrittenReplyTemplatesFor')}</p>
               </div>
               <button onClick={() => setIsResponseModalOpen(true)} className="btn btn-secondary flex items-center gap-1.5 h-8 px-3 text-sm">
                 <Plus className="w-3.5 h-3.5" />
-                {locale === 'ar' ? 'إضافة رد جاهز' : 'Add'}
+                {t('settingsPage.add2')}
               </button>
             </div>
             <div className="p-0">
               {formData.cannedResponses.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground text-sm">{locale === 'ar' ? 'لم يتم إنشاء أي ردود جاهزة بعد.' : 'No canned responses created yet.'}</div>
+                <div className="p-8 text-center text-muted-foreground text-sm">{t('settingsPage.noCannedResponsesCreatedYet')}</div>
               ) : (
                 <div className="divide-y divide-border">
                   {formData.cannedResponses.map(resp => (
@@ -578,7 +578,7 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
             ) : (
               <Save className="w-4 h-4" />
             )}
-            {isPending ? (locale === 'ar' ? 'جاري الحفظ...' : 'Saving...') : (locale === 'ar' ? 'حفظ كافة الإعدادات' : 'Save All Settings')}
+            {isPending ? (t('settingsPage.saving')) : (t('settingsPage.saveAllSettings'))}
           </button>
         </div>
 
@@ -589,39 +589,39 @@ export default function SettingsClient({ initialSettings, agents }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
           <div className="bg-[var(--bg-surface)] border border-border rounded-2xl w-full max-w-lg shadow-xl overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h3 className="font-semibold">{locale === 'ar' ? 'إضافة رد جاهز' : 'Add Canned Response'}</h3>
+              <h3 className="font-semibold">{t('settingsPage.addCannedResponse')}</h3>
               <button onClick={() => setIsResponseModalOpen(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">{locale === 'ar' ? 'العنوان' : 'Title'}</label>
+                <label className="text-sm font-medium">{t('settingsPage.title')}</label>
                 <input
                   type="text"
                   value={newResponse.title}
                   onChange={(e) => setNewResponse(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder={locale === 'ar' ? 'مثال: تعليمات إعادة تعيين كلمة المرور' : 'e.g. Password Reset'}
+                  placeholder={t('settingsPage.eGPasswordReset')}
                   className="w-full px-3 py-2 bg-[var(--bg-base)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">{locale === 'ar' ? 'المحتوى' : 'Content'}</label>
+                <label className="text-sm font-medium">{t('settingsPage.content')}</label>
                 <textarea
                   value={newResponse.content}
                   onChange={(e) => setNewResponse(prev => ({ ...prev, content: e.target.value }))}
                   rows={4}
-                  placeholder={locale === 'ar' ? 'اكتب نص الرد الجاهز هنا بالتفصيل...' : 'The template message body...'}
+                  placeholder={t('settingsPage.theTemplateMessageBody')}
                   className="w-full px-3 py-2 bg-[var(--bg-base)] border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                 />
               </div>
             </div>
             <div className="px-6 py-4 border-t border-border bg-muted/10 flex justify-end gap-2">
               <button onClick={() => setIsResponseModalOpen(false)} className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-xl transition-colors">
-                {locale === 'ar' ? 'إلغاء' : 'Cancel'}
+                {t('settingsPage.cancel')}
               </button>
               <button onClick={handleAddResponse} className="btn btn-primary px-4 py-2 text-sm">
-                {locale === 'ar' ? 'حفظ النموذج' : 'Save Template'}
+                {t('settingsPage.saveTemplate')}
               </button>
             </div>
           </div>

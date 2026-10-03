@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { createTranslator } from '@/lib/i18n/translate'
 import { Ticket, Plus, User, FolderX, AlertTriangle, Monitor, Code, Wifi, Mail, Key, Hash, LifeBuoy, Printer, Shield } from 'lucide-react'
 import { getSession } from '@/lib/session'
 import { cookies } from 'next/headers'
@@ -18,6 +19,7 @@ export default async function TicketsLayout({
   const session = await getSession()
   const cookieStore = await cookies()
   const locale = (cookieStore.get('helpdesk-lang')?.value === 'ar' ? 'ar' : 'en') as 'en' | 'ar'
+  const t = createTranslator(locale)
   const brandName = getBrandName((await getAppSettings())?.appName, locale)
 
   // Fetch counts
@@ -73,7 +75,7 @@ export default async function TicketsLayout({
                   {brandName}
                 </p>
                 <p className="text-[10px] uppercase tracking-wider font-semibold truncate" style={{ color: 'var(--text-muted)' }}>
-                  {locale === 'ar' ? 'بوابة الموظف' : 'Employee Portal'}
+                  {t('portalLayout.employeePortal')}
                 </p>
               </div>
             </div>
@@ -81,7 +83,7 @@ export default async function TicketsLayout({
             <nav className="hidden md:flex items-center gap-1 shrink-0">
               <Link href="/tickets" className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-hover)] text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                 <Ticket className="w-4 h-4 text-[var(--brand)]" />
-                <span>{locale === 'ar' ? 'تذاكري' : 'My Tickets'}</span>
+                <span>{t('portalLayout.myTickets')}</span>
               </Link>
             </nav>
           </div>
@@ -91,10 +93,10 @@ export default async function TicketsLayout({
             <Link
               href="/tickets/new"
               className="btn btn-primary text-sm h-9 px-2.5 sm:px-4 items-center shadow-sm"
-              aria-label={locale === 'ar' ? 'إنشاء تذكرة' : 'Create Ticket'}
+              aria-label={t('portalLayout.createTicket')}
             >
               <Plus className="w-4 h-4 sm:me-1.5" />
-              <span className="hidden sm:inline">{locale === 'ar' ? 'إنشاء تذكرة' : 'Create Ticket'}</span>
+              <span className="hidden sm:inline">{t('portalLayout.createTicket')}</span>
             </Link>
 
             <ThemeSwitcher />
@@ -125,7 +127,7 @@ export default async function TicketsLayout({
                 {brandName}
               </p>
               <p className="text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>
-                {locale === 'ar' ? 'منصة الدعم الفني' : 'IT Support Platform'}
+                {t('portalLayout.itSupportPlatform')}
               </p>
             </div>
           </div>
@@ -138,19 +140,19 @@ export default async function TicketsLayout({
         <nav className="flex-1 overflow-y-auto p-4 space-y-6">
 
           <div>
-            <p className="nav-section-label text-[10px] font-bold uppercase tracking-wider mb-2 text-[var(--text-muted)]">{locale === 'ar' ? 'مساحة العمل' : 'Workspace'}</p>
+            <p className="nav-section-label text-[10px] font-bold uppercase tracking-wider mb-2 text-[var(--text-muted)]">{t('portalLayout.workspace')}</p>
             <div className="space-y-1">
               <Link href="/tickets" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
                 <div className="flex items-center gap-2">
                   <Ticket className="w-4 h-4" />
-                  <span>{locale === 'ar' ? 'لوحة المؤشرات' : 'Dashboard'}</span>
+                  <span>{t('portalLayout.dashboard')}</span>
                 </div>
               </Link>
               {session?.role === 'ADMIN' && (
                 <Link href="/admin/users" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 text-sm font-medium mt-2 border border-indigo-500/20">
                   <div className="flex items-center gap-2">
                     <Shield className="w-4 h-4" />
-                    <span>{locale === 'ar' ? 'العودة للإدارة' : 'Back to Admin'}</span>
+                    <span>{t('portalLayout.backToAdmin')}</span>
                   </div>
                 </Link>
               )}
@@ -165,34 +167,34 @@ export default async function TicketsLayout({
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                     <span className="text-xs font-bold text-red-600 dark:text-red-400">
-                      {locale === 'ar' ? `${critical} بلاغ حرج نشط` : `${critical} Critical Incident${critical > 1 ? 's' : ''} Active`}
+                      {t(critical > 1 ? 'portalLayout.criticalActiveMany' : 'portalLayout.criticalActiveOne', { count: critical })}
                     </span>
                   </div>
                   <p className="text-[10px] text-red-500/80 dark:text-red-400/80 leading-relaxed">
-                    {locale === 'ar' ? 'البلاغات الحرجة غير المحلولة تتطلب استجابة فورية.' : 'Unresolved critical tickets require immediate attention.'}
+                    {t('portalLayout.unresolvedCriticalTicketsRequireImmediate')}
                   </p>
                   <Link
                     href="/tickets?priority=CRITICAL"
                     className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400 hover:underline"
                   >
-                    {locale === 'ar' ? 'عرض قائمة البلاغات الحرجة ←' : 'View Critical Queue →'}
+                    {t('portalLayout.viewCriticalQueue')}
                   </Link>
                 </div>
               )}
 
               <div>
-                <p className="nav-section-label text-[10px] font-bold uppercase tracking-wider mb-2 text-[var(--text-muted)]">{locale === 'ar' ? 'قوائم الانتظار التشغيلية' : 'Operational Queues'}</p>
+                <p className="nav-section-label text-[10px] font-bold uppercase tracking-wider mb-2 text-[var(--text-muted)]">{t('portalLayout.operationalQueues')}</p>
                 <div className="space-y-1">
                   <Link href="/tickets?status=ASSIGNED,IN_PROGRESS&assignedToMe=true" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><User className="w-4 h-4 text-violet-500" /><span>{locale === 'ar' ? 'المسندة إليّ' : 'Assigned to Me'}</span></div>
+                    <div className="flex items-center gap-2"><User className="w-4 h-4 text-violet-500" /><span>{t('portalLayout.assignedToMe')}</span></div>
                     {assignedToMe > 0 && <span className="text-[10px] bg-[var(--bg-hover)] text-[var(--text-primary)] px-1.5 py-0.5 rounded-md font-semibold">{assignedToMe}</span>}
                   </Link>
                   <Link href="/tickets?status=OPEN" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><FolderX className="w-4 h-4 text-amber-500" /><span>{locale === 'ar' ? 'غير مسندة' : 'Unassigned'}</span></div>
+                    <div className="flex items-center gap-2"><FolderX className="w-4 h-4 text-amber-500" /><span>{t('portalLayout.unassigned')}</span></div>
                     {unassigned > 0 && <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-semibold">{unassigned}</span>}
                   </Link>
                   <Link href="/tickets?priority=CRITICAL" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" /><span>{locale === 'ar' ? 'حرجة' : 'Critical'}</span></div>
+                    <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" /><span>{t('portalLayout.critical')}</span></div>
                     {critical > 0 && (
                       <span className="text-[10px] bg-red-500 text-white font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping opacity-75" />
@@ -204,34 +206,34 @@ export default async function TicketsLayout({
               </div>
 
               <div>
-                <p className="nav-section-label text-[10px] font-bold uppercase tracking-wider mb-2 text-[var(--text-muted)]">{locale === 'ar' ? 'التصنيفات' : 'Categories'}</p>
+                <p className="nav-section-label text-[10px] font-bold uppercase tracking-wider mb-2 text-[var(--text-muted)]">{t('portalLayout.categories')}</p>
                 <div className="space-y-1">
                   <Link href="/tickets?category=Hardware" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><Monitor className="w-3.5 h-3.5" /><span>{locale === 'ar' ? 'أجهزة ومعدات' : 'Hardware'}</span></div>
+                    <div className="flex items-center gap-2"><Monitor className="w-3.5 h-3.5" /><span>{t('portalLayout.hardware')}</span></div>
                     {hardware > 0 && <span className="text-[10px] text-[var(--text-muted)]">{hardware}</span>}
                   </Link>
                   <Link href="/tickets?category=Software" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><Code className="w-3.5 h-3.5" /><span>{locale === 'ar' ? 'برمجيات وأنظمة' : 'Software'}</span></div>
+                    <div className="flex items-center gap-2"><Code className="w-3.5 h-3.5" /><span>{t('portalLayout.software')}</span></div>
                     {software > 0 && <span className="text-[10px] text-[var(--text-muted)]">{software}</span>}
                   </Link>
                   <Link href="/tickets?category=Network" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><Wifi className="w-3.5 h-3.5" /><span>{locale === 'ar' ? 'شبكات وإنترنت' : 'Network'}</span></div>
+                    <div className="flex items-center gap-2"><Wifi className="w-3.5 h-3.5" /><span>{t('portalLayout.network')}</span></div>
                     {network > 0 && <span className="text-[10px] text-[var(--text-muted)]">{network}</span>}
                   </Link>
                   <Link href="/tickets?category=Email" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" /><span>{locale === 'ar' ? 'البريد والتواصل' : 'Email'}</span></div>
+                    <div className="flex items-center gap-2"><Mail className="w-3.5 h-3.5" /><span>{t('portalLayout.email')}</span></div>
                     {email > 0 && <span className="text-[10px] text-[var(--text-muted)]">{email}</span>}
                   </Link>
                   <Link href="/tickets?category=Access Issue" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><Key className="w-3.5 h-3.5" /><span>{locale === 'ar' ? 'الصلاحيات والوصول' : 'Access Issue'}</span></div>
+                    <div className="flex items-center gap-2"><Key className="w-3.5 h-3.5" /><span>{t('portalLayout.accessIssue')}</span></div>
                     {access > 0 && <span className="text-[10px] text-[var(--text-muted)]">{access}</span>}
                   </Link>
                   <Link href="/tickets?category=Printer" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><Printer className="w-3.5 h-3.5" /><span>{locale === 'ar' ? 'الطابعات' : 'Printer'}</span></div>
+                    <div className="flex items-center gap-2"><Printer className="w-3.5 h-3.5" /><span>{t('portalLayout.printer')}</span></div>
                     {printer > 0 && <span className="text-[10px] text-[var(--text-muted)]">{printer}</span>}
                   </Link>
                   <Link href="/tickets?category=Other" className="nav-link flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--bg-hover)] text-sm text-[var(--text-secondary)]">
-                    <div className="flex items-center gap-2"><Hash className="w-3.5 h-3.5" /><span>{locale === 'ar' ? 'أخرى' : 'Other'}</span></div>
+                    <div className="flex items-center gap-2"><Hash className="w-3.5 h-3.5" /><span>{t('portalLayout.other')}</span></div>
                     {other > 0 && <span className="text-[10px] text-[var(--text-muted)]">{other}</span>}
                   </Link>
                 </div>
@@ -261,14 +263,14 @@ export default async function TicketsLayout({
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 animate-bounce text-rose-600 dark:text-rose-400" />
               <span>
-                {locale === 'ar' ? `⚡ ${critical} بلاغ حرج — يتطلب استجابة فورية` : `⚡ ${critical} Critical Incident${critical > 1 ? 's' : ''} — Immediate Response Required`}
+                {t(critical > 1 ? 'portalLayout.criticalUrgentMany' : 'portalLayout.criticalUrgentOne', { count: critical })}
               </span>
             </div>
             <Link
               href="/tickets?priority=CRITICAL"
               className="shrink-0 px-3.5 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 dark:bg-rose-500/20 dark:hover:bg-rose-500/30 transition-colors text-white dark:text-rose-200 text-xs font-medium shadow-xs dark:shadow-none border border-transparent dark:border-rose-700/40"
             >
-              {locale === 'ar' ? 'عرض الآن ←' : 'View Now →'}
+              {t('portalLayout.viewNow')}
             </Link>
           </div>
         )}

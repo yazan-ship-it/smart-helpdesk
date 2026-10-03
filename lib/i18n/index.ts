@@ -4,6 +4,7 @@ import { ar } from './locales/ar'
 export * from './LanguageContext'
 export * from './locales/en'
 export * from './locales/ar'
+export * from './translate'
 
 export function getStatusLabel(status: string, locale: 'en' | 'ar' = 'en'): string {
   const dict = locale === 'ar' ? ar.statuses : en.statuses

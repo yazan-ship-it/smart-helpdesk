@@ -91,10 +91,10 @@ export default function UserDropdown({ user, placement = 'bottom-end' }: Props) 
               <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Globe className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>{locale === 'ar' ? 'اللغة / Language' : 'Language / اللغة'}</span>
+                  <span>{t('userMenu.language')}</span>
                 </span>
                 <span className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 px-1.5 py-0.2 rounded bg-indigo-500/10">
-                  {locale === 'ar' ? 'العربية' : 'EN'}
+                  {t('userMenu.en')}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-1 p-0.5 bg-muted/60 rounded-lg">
@@ -126,28 +126,28 @@ export default function UserDropdown({ user, placement = 'bottom-end' }: Props) 
             {/* Quick Theme Switch inside user dropdown */}
             <div className="p-1.5 space-y-0.5">
               <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                {locale === 'ar' ? 'المظهر' : 'Theme'}
+                {t('userMenu.theme')}
               </div>
               <button
                 type="button"
                 onClick={() => setTheme('light')}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg transition-colors cursor-pointer ${theme === 'light' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
               >
-                <Sun className="w-4 h-4" /> {locale === 'ar' ? 'فاتح' : 'Light'}
+                <Sun className="w-4 h-4" /> {t('userMenu.light')}
               </button>
               <button
                 type="button"
                 onClick={() => setTheme('dark')}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg transition-colors cursor-pointer ${theme === 'dark' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
               >
-                <Moon className="w-4 h-4" /> {locale === 'ar' ? 'داكن' : 'Dark'}
+                <Moon className="w-4 h-4" /> {t('userMenu.dark')}
               </button>
               <button
                 type="button"
                 onClick={() => setTheme('system')}
                 className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-lg transition-colors cursor-pointer ${theme === 'system' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
               >
-                <Monitor className="w-4 h-4" /> {locale === 'ar' ? 'تلقائي (النظام)' : 'System'}
+                <Monitor className="w-4 h-4" /> {t('userMenu.system')}
               </button>
             </div>
 

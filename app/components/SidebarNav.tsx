@@ -33,7 +33,7 @@ export default function SidebarNav({
   slaBreaches = []
 }: SidebarNavProps) {
   const pathname = usePathname()
-  const { t, locale } = useTranslation()
+  const { t } = useTranslation()
 
   const items = [
     { href: '/admin/users', label: t('nav.userManagement'), icon: Users },
@@ -48,9 +48,9 @@ export default function SidebarNav({
     const ms = new Date().getTime() - parsedDate.getTime()
     const hours = Math.floor(ms / (1000 * 60 * 60))
     const mins = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60))
-    const dUnit = locale === 'ar' ? 'ي' : 'd'
-    const hUnit = locale === 'ar' ? 'س' : 'h'
-    const mUnit = locale === 'ar' ? 'د' : 'm'
+    const dUnit = t('sidebar.d')
+    const hUnit = t('sidebar.h')
+    const mUnit = t('sidebar.m')
 
     if (hours >= 24) return `-${Math.floor(hours/24)}${dUnit} ${hours % 24}${hUnit}`
     if (hours > 0) return `-${hours}${hUnit} ${mins}${mUnit}`
@@ -124,7 +124,7 @@ export default function SidebarNav({
               {pendingApprovalsCount === 0 ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground italic px-2 py-1">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  {locale === 'ar' ? 'لا توجد طلبات معلقة' : 'No pending registrations'}
+                  {t('sidebar.noPendingRegistrations')}
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -140,7 +140,7 @@ export default function SidebarNav({
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
                         <p className="text-xs text-amber-600 dark:text-amber-500 truncate">
-                          {locale === 'ar' ? 'بانتظار الاعتماد' : 'Pending approval'}
+                          {t('sidebar.pendingApproval')}
                         </p>
                       </div>
                     </Link>
@@ -149,7 +149,7 @@ export default function SidebarNav({
                     href="/admin/users?status=PENDING"
                     className="block text-xs font-medium text-indigo-500 hover:text-indigo-600 mt-2 p-2 hover:underline"
                   >
-                    {locale === 'ar' ? 'عرض واعتماد كافة المستخدمين ←' : 'View all pending in Users →'}
+                    {t('sidebar.viewAllPendingInUsers')}
                   </Link>
                 </div>
               )}
@@ -184,7 +184,7 @@ export default function SidebarNav({
               {slaBreachesCount === 0 ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground italic px-2 py-1">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  {locale === 'ar' ? 'كافة التذاكر ضمن المستهدف الزمني' : 'All SLAs within targets'}
+                  {t('sidebar.allSlasWithinTargets')}
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -210,7 +210,7 @@ export default function SidebarNav({
                     href="/admin/tickets?filter=sla_breached"
                     className="block text-xs font-medium text-indigo-500 hover:text-indigo-600 mt-2 p-2 hover:underline"
                   >
-                    {locale === 'ar' ? 'عرض كافة التجاوزات ←' : 'View all breached tickets →'}
+                    {t('sidebar.viewAllBreachedTickets')}
                   </Link>
                 </div>
               )}

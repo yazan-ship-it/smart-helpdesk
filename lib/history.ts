@@ -19,6 +19,8 @@ export type HistoryEvent =
   | { type: 'resolution_confirmed' }
   | { type: 'reopened'; reason: string }
   | { type: 'csat_submitted'; rating: number }
+  /** The assigned agent was suspended or stopped being IT support */
+  | { type: 'returned_to_queue'; agent: string }
 
 function englishSentence(e: HistoryEvent, actor: string): string {
   switch (e.type) {
@@ -46,6 +48,8 @@ function englishSentence(e: HistoryEvent, actor: string): string {
       return `Ticket reopened by requester. Reason: ${e.reason}`
     case 'csat_submitted':
       return `CSAT Rating submitted: ${e.rating} Stars`
+    case 'returned_to_queue':
+      return `Returned to the unassigned queue: ${e.agent} is no longer an active agent`
   }
 }
 
@@ -111,6 +115,8 @@ export function describeHistory(
       return t('history.reopened', { reason: e.reason })
     case 'csat_submitted':
       return t('history.csat_submitted', { rating: e.rating })
+    case 'returned_to_queue':
+      return t('history.returned_to_queue', { agent: e.agent })
     default:
       return row.action
   }

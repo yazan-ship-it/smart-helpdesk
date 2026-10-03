@@ -177,3 +177,48 @@ export function statusChangeFields(
   }
   return { resolvedAt: null, closedAt: null }
 }
+
+/** The admin's SLA settings (AppSettings); missing values fall back to the defaults */
+export type SlaSettings = {
+  slaCriticalHours: number
+  slaHighHours: number
+  slaMediumHours: number
+  slaLowHours: number
+  workDays: string
+  businessHoursStart: string
+  businessHoursEnd: string
+  pauseSlaOnWeekends: boolean
+} | null | undefined
+
+const DAY_NUMBERS: Record<string, number> = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 }
+
+/** Resolution deadline for a ticket of `priority` whose SLA clock starts at `from` */
+export function slaDeadlineFor(priority: string, settings: SlaSettings, from: Date = new Date()): Date {
+  const hours =
+    priority === 'CRITICAL' ? settings?.slaCriticalHours ?? 4
+    : priority === 'HIGH' ? settings?.slaHighHours ?? 24
+    : priority === 'LOW' ? settings?.slaLowHours ?? 72
+    : settings?.slaMediumHours ?? 48
+
+  let days: unknown
+  try {
+    days = JSON.parse(settings?.workDays ?? '')
+  } catch {
+    days = null
+  }
+  const workDays = (Array.isArray(days) ? days : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'])
+    .map((d) => DAY_NUMBERS[d as string])
+    .filter((n): n is number => n !== undefined)
+
+  const [startHour, startMinute] = (settings?.businessHoursStart ?? '09:00').split(':').map(Number)
+  const [endHour, endMinute] = (settings?.businessHoursEnd ?? '17:00').split(':').map(Number)
+
+  return calculateBusinessHoursDeadline(from, hours, {
+    startHour,
+    startMinute,
+    endHour,
+    endMinute,
+    workDays,
+    pauseOnWeekends: settings?.pauseSlaOnWeekends ?? true,
+  })
+}

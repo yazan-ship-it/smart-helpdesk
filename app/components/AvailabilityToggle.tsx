@@ -11,7 +11,7 @@ type Props = {
 }
 
 export default function AvailabilityToggle({ initialAvailability }: Props) {
-  const { t, locale } = useTranslation()
+  const { t } = useTranslation()
   const [isAvailable, setIsAvailable] = useState(initialAvailability)
   const [isPending, startTransition] = useTransition()
 
@@ -25,27 +25,23 @@ export default function AvailabilityToggle({ initialAvailability }: Props) {
       setIsAvailable(result.isAvailable)
       if (result.isAvailable) {
         toast.success(
-          locale === 'ar'
-            ? 'تم تعيين الحالة إلى متاح — ستتلقى التذاكر الجديدة'
-            : 'Status set to Available — you will receive new assignments'
+          t('availability.statusSetToAvailableYou')
         )
       } else {
         toast.info(
-          locale === 'ar'
-            ? 'تم تعيين الحالة إلى غير متواجد — لن يتم توجيه تذاكر جديدة إليك'
-            : 'Status set to Away — new tickets will not be routed to you'
+          t('availability.statusSetToAwayNew')
         )
       }
     })
   }
 
   const labelText = isAvailable 
-    ? (locale === 'ar' ? 'متاح' : 'Available')
-    : (locale === 'ar' ? 'غير متواجد' : 'Away')
+    ? (t('availability.available'))
+    : (t('availability.away'))
 
   const titleText = isAvailable
-    ? (locale === 'ar' ? 'انقر للتحويل إلى غير متواجد' : 'Click to go Away')
-    : (locale === 'ar' ? 'انقر للتحويل إلى متاح' : 'Click to go Available')
+    ? (t('availability.clickToGoAway'))
+    : (t('availability.clickToGoAvailable'))
 
   return (
     <button

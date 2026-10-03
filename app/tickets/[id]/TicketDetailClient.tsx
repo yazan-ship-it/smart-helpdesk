@@ -337,12 +337,12 @@ export default function TicketDetailClient({
  {copied ? (
  <>
  <Check className="w-3.5 h-3.5 text-emerald-800 dark:text-emerald-300" />
- <span className="text-xs text-emerald-800 dark:text-emerald-300">{locale === 'ar' ? 'تم النسخ' : 'Copied URL'}</span>
+ <span className="text-xs text-emerald-800 dark:text-emerald-300">{t('ticketPage.copiedUrl')}</span>
  </>
  ) : (
  <>
  <Copy className="w-3.5 h-3.5 text-muted-foreground" />
- <span className="text-xs">{locale === 'ar' ? 'مشاركة الرابط' : 'Share Link'}</span>
+ <span className="text-xs">{t('ticketPage.shareLink')}</span>
  </>
  )}
  </button>
@@ -353,7 +353,7 @@ export default function TicketDetailClient({
    <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in">
      <div className="flex items-center gap-3 text-emerald-800 dark:text-emerald-300">
        <CheckCircle2 className="w-6 h-6 shrink-0" />
-       <p className="font-semibold text-[15px]">{locale === 'ar' ? 'قام فريق الدعم الفني بحل المشكلة. هل تم الإصلاح بنجاح؟' : 'The IT team marked this issue as resolved. Does everything work properly?'}</p>
+       <p className="font-semibold text-[15px]">{t('ticketPage.theItTeamMarkedThis')}</p>
      </div>
      <div className="flex items-center gap-3 shrink-0 w-full md:w-auto">
        <button
@@ -361,7 +361,7 @@ export default function TicketDetailClient({
          disabled={isPendingAction}
          className="btn btn-secondary flex-1 md:flex-auto bg-card"
        >
-         ↺ {locale === 'ar' ? 'المشكلة ما زالت مستمرة' : 'Issue Still Persists'}
+         ↺ {t('ticketPage.issueStillPersists')}
        </button>
        <button
          onClick={() => {
@@ -374,7 +374,7 @@ export default function TicketDetailClient({
          disabled={isPendingAction}
          className="btn btn-primary flex-1 md:flex-auto bg-emerald-600 hover:bg-emerald-700 text-white border-0"
        >
-         ✓ {locale === 'ar' ? 'تأكيد وإغلاق' : 'Confirm & Close'}
+         ✓ {t('ticketPage.confirmClose')}
        </button>
      </div>
    </div>
@@ -382,22 +382,22 @@ export default function TicketDetailClient({
 
  {showReopenDialog && (
    <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-5 shadow-sm animate-fade-in space-y-3">
-     <h3 className="font-semibold text-amber-800 dark:text-amber-300">{locale === 'ar' ? 'إعادة فتح التذكرة' : 'Reopen Ticket'}</h3>
+     <h3 className="font-semibold text-amber-800 dark:text-amber-300">{t('ticketPage.reopenTicket')}</h3>
      <textarea
        value={reopenReason}
        onChange={(e) => setReopenReason(e.target.value)}
-       placeholder={locale === 'ar' ? 'يرجى توضيح سبب عدم حل المشكلة بالتفصيل...' : 'Please describe why this issue is not resolved...'}
+       placeholder={t('ticketPage.pleaseDescribeWhyThisIssue')}
        className="w-full p-3 rounded-xl border border-amber-500/30 bg-background text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
        rows={3}
      />
      <div className="flex justify-end gap-2">
-       <button onClick={() => setShowReopenDialog(false)} className="btn btn-secondary text-sm">{locale === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+       <button onClick={() => setShowReopenDialog(false)} className="btn btn-secondary text-sm">{t('ticketPage.cancel')}</button>
        <button
          onClick={() => {
            startTransitionAction(async () => {
              const res = await reopenTicket(ticket.id, reopenReason)
              if (res.error) toast.error(t(`errors.${res.error}`, res.params))
-             else { toast.success(locale === 'ar' ? 'تم إعادة فتح التذكرة بنجاح' : 'Ticket reopened'); setShowReopenDialog(false); setReopenReason(''); router.refresh() }
+             else { toast.success(t('ticketPage.ticketReopened')); setShowReopenDialog(false); setReopenReason(''); router.refresh() }
            })
          }}
          disabled={isPendingAction || reopenReason.trim().length < 5}
@@ -412,8 +412,8 @@ export default function TicketDetailClient({
  {currentUserRole === 'EMPLOYEE' && ticket.status === 'CLOSED' && ticket.csatRating === null && (
    <div className="mb-6 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-5 shadow-sm animate-fade-in text-center space-y-4">
      <div>
-       <h3 className="font-bold text-indigo-800 dark:text-indigo-300">{locale === 'ar' ? 'كيف كانت تجربتك؟' : 'How was your experience?'}</h3>
-       <p className="text-sm text-indigo-700/80 dark:text-indigo-400/80">{locale === 'ar' ? 'يرجى تقييم الدعم الذي تلقيته لهذه التذكرة.' : 'Please rate the support you received for this ticket.'}</p>
+       <h3 className="font-bold text-indigo-800 dark:text-indigo-300">{t('ticketPage.howWasYourExperience')}</h3>
+       <p className="text-sm text-indigo-700/80 dark:text-indigo-400/80">{t('ticketPage.pleaseRateTheSupportYou')}</p>
      </div>
      <div className="flex items-center justify-center gap-2">
        {[1, 2, 3, 4, 5].map((star) => (
@@ -432,7 +432,7 @@ export default function TicketDetailClient({
          <textarea
            value={csatFeedbackText}
            onChange={(e) => setCsatFeedbackText(e.target.value)}
-           placeholder={locale === 'ar' ? 'ملاحظات إضافية (اختياري)...' : 'Optional feedback...'}
+           placeholder={t('ticketPage.optionalFeedback')}
            className="w-full p-3 rounded-xl border border-indigo-500/30 bg-background text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
            rows={2}
          />
@@ -473,11 +473,11 @@ export default function TicketDetailClient({
        />
 
        {[
-         { id: 'OPEN', label: locale === 'ar' ? 'تم الإرسال' : 'Submitted' },
-         { id: 'ASSIGNED', label: locale === 'ar' ? 'مسندة' : 'Assigned' },
-         { id: 'IN_PROGRESS', label: locale === 'ar' ? 'قيد العمل' : 'In Progress' },
-         { id: 'RESOLVED', label: locale === 'ar' ? 'تم الحل' : 'Resolved' },
-         { id: 'CLOSED', label: locale === 'ar' ? 'مغلقة' : 'Closed' }
+         { id: 'OPEN', label: t('ticketPage.submitted') },
+         { id: 'ASSIGNED', label: t('ticketPage.assigned') },
+         { id: 'IN_PROGRESS', label: t('ticketPage.inProgress') },
+         { id: 'RESOLVED', label: t('ticketPage.resolved') },
+         { id: 'CLOSED', label: t('ticketPage.closed') }
        ].map((step, idx) => {
          const statuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
          const currentIdx = statuses.indexOf(ticket.status);
@@ -555,12 +555,12 @@ export default function TicketDetailClient({
  <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
  <span className="flex items-center gap-1.5">
  <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
- {locale === 'ar' ? 'تم الإنشاء ' : 'Created '}{formatRelativeTime(ticket.createdAt, locale)}
+ {t('ticketPage.created')}{formatRelativeTime(ticket.createdAt, locale)}
  </span>
  <span>•</span>
  <span className="flex items-center gap-1.5">
  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
- {locale === 'ar' ? 'آخر نشاط ' : 'Active '}{formatRelativeTime(ticket.updatedAt, locale)}
+ {t('ticketPage.active')}{formatRelativeTime(ticket.updatedAt, locale)}
  </span>
  </div>
  </div>
@@ -592,7 +592,7 @@ export default function TicketDetailClient({
  <span className="text-sm font-semibold text-foreground">
  {ticket.createdBy.name}
  </span>
- <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{locale === 'ar' ? 'مقدم الطلب' : 'Requester'}</span>
+ <span className="text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{t('ticketPage.requester')}</span>
  </div>
  <span className="text-xs text-muted-foreground">
  {ticket.createdBy.email}
@@ -618,7 +618,7 @@ export default function TicketDetailClient({
  <div className="mt-6 pt-5 border-t border-border">
  <div className="flex items-center gap-2 mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
  <Paperclip className="w-3.5 h-3.5 text-indigo-700 dark:text-indigo-400" />
- <span>{locale === 'ar' ? `المرفقات المرفوعة (${attachmentsList.length})` : `Uploaded Attachments (${attachmentsList.length})`}</span>
+ <span>{t('ticketPage.uploadedAttachments', { length: attachmentsList.length })}</span>
  </div>
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
  {attachmentsList.map((file, idx) => {
@@ -666,10 +666,10 @@ export default function TicketDetailClient({
  <div className="flex items-center gap-2">
  <Activity className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
  <h2 className="text-sm font-semibold text-foreground">
- {locale === 'ar' ? 'السجل الزمني للمحادثة والنشاط' : 'Chronological Activity & Discussion'}
+ {t('ticketPage.chronologicalActivityDiscussion')}
  </h2>
  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground border border-border">
- {locale === 'ar' ? `${ticket.comments.length} ردود` : `${ticket.comments.length} responses`}
+ {t('ticketPage.responses', { length: ticket.comments.length })}
  </span>
  </div>
 
@@ -683,7 +683,7 @@ export default function TicketDetailClient({
  : 'text-muted-foreground hover:text-foreground'
  }`}
  >
- {locale === 'ar' ? 'كل الأنشطة' : 'All Activity'}
+ {t('ticketPage.allActivity')}
  </button>
  <button
  onClick={() => setActiveTab('comments')}
@@ -693,7 +693,7 @@ export default function TicketDetailClient({
  : 'text-muted-foreground hover:text-foreground'
  }`}
  >
- {locale === 'ar' ? `التعليقات (${ticket.comments.length})` : `Comments (${ticket.comments.length})`}
+ {t('ticketPage.comments', { length: ticket.comments.length })}
  </button>
  <button
  onClick={() => setActiveTab('history')}
@@ -703,7 +703,7 @@ export default function TicketDetailClient({
  : 'text-muted-foreground hover:text-foreground'
  }`}
  >
- {locale === 'ar' ? `سجل التغييرات (${ticket.ticketHistories.length})` : `Audit Trail (${ticket.ticketHistories.length})`}
+ {t('ticketPage.auditTrail', { length: ticket.ticketHistories.length })}
  </button>
  </div>
  </div>
@@ -713,10 +713,10 @@ export default function TicketDetailClient({
  <div className="card p-8 text-center border-dashed border-border bg-muted dark:bg-card/30">
  <MessageSquare className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
  <p className="text-sm font-medium text-foreground">
- {locale === 'ar' ? 'لا توجد أنشطة مسجلة بعد' : 'No activity recorded yet'}
+ {t('ticketPage.noActivityRecordedYet')}
  </p>
  <p className="text-xs text-muted-foreground mt-1">
- {locale === 'ar' ? 'أرسل أول ملاحظة تشخيصية أو تحديث حل أدناه.' : 'Submit the first diagnostic note or resolution update below.'}
+ {t('ticketPage.submitTheFirstDiagnosticNote')}
  </p>
  </div>
  ) : (
@@ -750,12 +750,12 @@ export default function TicketDetailClient({
  : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
  }`}
  >
- {isSupport ? (locale === 'ar' ? 'أخصائي الدعم الفني' : 'IT Support Agent') : (locale === 'ar' ? 'مقدم الطلب' : 'Requester')}
+ {isSupport ? (t('ticketPage.itSupportAgent')) : (t('ticketPage.requester'))}
  </span>
  {c.isInternal && (
    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
      <Lock className="w-2.5 h-2.5" />
-     {locale === 'ar' ? 'ملاحظة خاصة' : 'Private Note'}
+     {t('ticketPage.privateNote')}
    </span>
  )}
  </div>
@@ -820,12 +820,12 @@ export default function TicketDetailClient({
  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
  <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
  <MessageSquare className="w-3.5 h-3.5 text-indigo-700 dark:text-indigo-400" />
- {locale === 'ar' ? 'إضافة رد أو تحديث...' : 'Add a response or update...'}
+ {t('ticketPage.addAResponseOrUpdate')}
  </span>
  {isITSupport && (
    <label className="flex items-center gap-2 text-[11px] font-semibold text-amber-700 dark:text-amber-400 cursor-pointer select-none bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 rounded-md transition-colors border border-amber-500/20">
      <input type="checkbox" checked={isInternalNote} onChange={(e) => setIsInternalNote(e.target.checked)} className="rounded border-amber-500/30 text-amber-600 focus:ring-amber-500/30" />
-     {locale === 'ar' ? '🔒 ملاحظة داخلية خاصة (لفريق الدعم فقط)' : '🔒 Private Internal Note (IT Only)'}
+     {t('ticketPage.privateInternalNoteItOnly')}
    </label>
  )}
  </div>
@@ -850,8 +850,8 @@ export default function TicketDetailClient({
  value={commentText}
  onChange={(e) => setCommentText(e.target.value)}
  placeholder={isInternalNote 
-    ? (locale === 'ar' ? 'اكتب ملاحظات فنية داخلية خاصة...' : 'Type private technical notes...') 
-    : (locale === 'ar' ? 'اكتب ملاحظات التشخيص، أو الرد على مقدم الطلب، أو تفاصيل الحل…' : 'Type diagnostic notes, requester reply, or resolution details…')}
+    ? (t('ticketPage.typePrivateTechnicalNotes')) 
+    : (t('ticketPage.typeDiagnosticNotesRequesterReply'))}
  className={`w-full rounded-xl p-3 text-sm outline-none transition-all focus:ring-2 resize-none ${isInternalNote ? 'bg-amber-500/5 border-amber-500/30 text-amber-900 dark:text-amber-100 placeholder:text-amber-700/50 focus:border-amber-500/60 focus:ring-amber-500/20 hover:border-amber-500/40' : 'bg-background dark:bg-background border border-border text-foreground dark:text-foreground placeholder:text-muted-foreground focus:border-indigo-500/60 focus:ring-indigo-500/20 hover:border-border'}`}
  disabled={isPendingComment}
  onKeyDown={(e) => {
@@ -870,12 +870,12 @@ export default function TicketDetailClient({
  {isPendingComment ? (
  <>
  <Loader2 className="w-3.5 h-3.5 animate-spin" />
- <span>{locale === 'ar' ? 'جاري الإرسال...' : 'Posting…'}</span>
+ <span>{t('ticketPage.posting')}</span>
  </>
  ) : (
  <>
  <Send className="w-3.5 h-3.5" />
- <span>{locale === 'ar' ? 'إرسال الرد' : 'Post Response'}</span>
+ <span>{t('ticketPage.postResponse')}</span>
  </>
  )}
  </button>
@@ -896,7 +896,7 @@ export default function TicketDetailClient({
  <div className="flex items-center gap-2">
  <Shield className="w-4 h-4 text-indigo-600 dark:text-indigo-700 dark:text-indigo-400" />
  <h3 className="text-sm font-semibold text-foreground">
- {locale === 'ar' ? 'إجراءات أخصائي الدعم' : 'IT Specialist Actions'}
+ {t('ticketPage.itSpecialistActions')}
  </h3>
  </div>
  <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-800 dark:text-indigo-300 font-semibold">
@@ -911,15 +911,15 @@ export default function TicketDetailClient({
                 <div className="flex items-center gap-2">
                   <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                   <span className="text-xs font-bold text-amber-800 dark:text-amber-300">
-                    {locale === 'ar' ? `مسندة إلى ${ticket.assignedTo?.name || 'الأخصائي'} — للقراءة فقط` : `Assigned to ${ticket.assignedTo?.name || 'Specialist'} - Read Only`}
+                    {t('ticketPage.assignedToReadOnly', { name: ticket.assignedTo?.name || t('ticketPage.theSpecialist') })}
                   </span>
                 </div>
                 <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 font-bold border border-amber-500/30">
-                  {locale === 'ar' ? 'مقفلة' : 'Locked'}
+                  {t('ticketPage.locked')}
                 </span>
               </div>
               <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80 leading-relaxed">
-                {locale === 'ar' ? `هذه التذكرة تحت مسؤولية ${ticket.assignedTo?.name || 'أخصائي آخر'}. تم تعطيل تعديل الحالة والإغلاق.` : `This ticket is owned by ${ticket.assignedTo?.name || 'another specialist'}. Status transitions and resolution controls are disabled.`}
+                {t('ticketPage.ownedByPeer', { name: ticket.assignedTo?.name || t('ticketPage.anotherSpecialist') })}
               </p>
               <button
                 type="button"
@@ -930,12 +930,12 @@ export default function TicketDetailClient({
                 {isPendingTakeOver ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>{locale === 'ar' ? 'جاري استلام التذكرة...' : 'Taking Over Ticket…'}</span>
+                    <span>{t('ticketPage.takingOverTicket')}</span>
                   </>
                 ) : (
                   <>
                     <UserCheck className="w-3.5 h-3.5" />
-                    <span>{locale === 'ar' ? 'استلام التذكرة / إسناد لي' : 'Take Over / Reassign to Me'}</span>
+                    <span>{t('ticketPage.takeOverReassignToMe')}</span>
                   </>
                 )}
               </button>
@@ -948,10 +948,10 @@ export default function TicketDetailClient({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  {locale === 'ar' ? 'بلاغ غير مسند' : 'Unassigned Incident'}
+                  {t('ticketPage.unassignedIncident')}
                 </span>
                 <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-800 dark:text-blue-300 font-bold">
-                  {locale === 'ar' ? 'قائمة مفتوحة' : 'Open Queue'}
+                  {t('ticketPage.openQueue')}
                 </span>
               </div>
               <button
@@ -965,7 +965,7 @@ export default function TicketDetailClient({
                 ) : (
                   <UserCheck className="w-3.5 h-3.5" />
                 )}
-                <span>{locale === 'ar' ? 'استلام التذكرة (إسناد لي)' : 'Claim Ticket (Assign to Me)'}</span>
+                <span>{t('ticketPage.claimTicketAssignToMe')}</span>
               </button>
             </div>
           )}
@@ -974,26 +974,26 @@ export default function TicketDetailClient({
  {canChangeStatus && (
  <div>
  <label className="block text-xs font-semibold text-foreground mb-2">
- {locale === 'ar' ? 'تغيير الحالة السريع' : 'Quick Status Change'}
+ {t('ticketPage.quickStatusChange')}
  </label>
  <div className="mb-2 flex items-center gap-1.5">
- <span className="text-[11px] text-muted-foreground">{locale === 'ar' ? 'الحالية:' : 'Current:'}</span>
+ <span className="text-[11px] text-muted-foreground">{t('ticketPage.current')}</span>
  <span className={statusBadgeClass(ticket.status as Status)}>
  <span className="badge-dot" />
  {getStatusLabel(ticket.status, locale)}
  </span>
  </div>
  {NEXT_STATUSES[ticket.status as Status]?.length === 0 ? (
- <p className="text-xs text-muted-foreground italic py-2">{locale === 'ar' ? 'هذه التذكرة في حالة نهائية (مغلقة).' : 'This ticket is in a terminal state (Closed).'}</p>
+ <p className="text-xs text-muted-foreground italic py-2">{t('ticketPage.thisTicketIsInA')}</p>
  ) : (
  <div className="flex flex-col gap-2">
  {NEXT_STATUSES[ticket.status as Status]?.map((nextStatus) => {
  const statusConfig: Record<Status, { label: string; cls: string; icon: React.ReactNode }> = {
- OPEN: { label: locale === 'ar' ? 'استلام وإسناد لي' : 'Claim & Assign to Me', cls: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40', icon: <Clock className="w-3.5 h-3.5" /> },
- ASSIGNED: { label: locale === 'ar' ? 'استلام وإسناد لي' : 'Claim & Assign to Me', cls: 'bg-violet-500/20 text-violet-600 dark:text-violet-300 border-violet-500/40', icon: <UserCheck className="w-3.5 h-3.5" /> },
- IN_PROGRESS: { label: locale === 'ar' ? 'بدء العمل' : 'Start Progress', cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40', icon: <Activity className="w-3.5 h-3.5" /> },
- RESOLVED: { label: locale === 'ar' ? 'تعيين كمنجزة 🎉' : 'Mark Resolved 🎉', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-500/40', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
- CLOSED: { label: locale === 'ar' ? 'إغلاق التذكرة' : 'Close Ticket', cls: 'bg-muted text-foreground border-border', icon: null },
+ OPEN: { label: t('ticketPage.claimAssignToMe'), cls: 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-500/40', icon: <Clock className="w-3.5 h-3.5" /> },
+ ASSIGNED: { label: t('ticketPage.claimAssignToMe'), cls: 'bg-violet-500/20 text-violet-600 dark:text-violet-300 border-violet-500/40', icon: <UserCheck className="w-3.5 h-3.5" /> },
+ IN_PROGRESS: { label: t('ticketPage.startProgress'), cls: 'bg-blue-500/20 text-blue-300 border-blue-500/40', icon: <Activity className="w-3.5 h-3.5" /> },
+ RESOLVED: { label: t('ticketPage.markResolved'), cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-emerald-500/40', icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+ CLOSED: { label: t('ticketPage.closeTicket'), cls: 'bg-muted text-foreground border-border', icon: null },
  }
  const cfg = statusConfig[nextStatus]
  return (
@@ -1025,10 +1025,10 @@ export default function TicketDetailClient({
   <form onSubmit={handleAssignSubmit} className="space-y-3 pt-2 border-t border-border">
   <div className="flex items-center justify-between">
   <label className="block text-xs font-semibold text-foreground">
-  {ticket.assignedTo ? (locale === 'ar' ? 'إعادة إسناد الأخصائي' : 'Reassign Specialist') : (locale === 'ar' ? 'إسناد لأخصائي دعم' : 'Assign Support Specialist')}
+  {ticket.assignedTo ? (t('ticketPage.reassignSpecialist')) : (t('ticketPage.assignSupportSpecialist'))}
   </label>
   {ticket.assignedTo && (
-  <span className="text-[10px] text-muted-foreground italic">{locale === 'ar' ? `الحالي: ${ticket.assignedTo.name}` : `Current: ${ticket.assignedTo.name}`}</span>
+  <span className="text-[10px] text-muted-foreground italic">{t('ticketPage.current2', { name: ticket.assignedTo.name })}</span>
   )}
   </div>
   {/* Agent Cards */}
@@ -1055,9 +1055,9 @@ export default function TicketDetailClient({
   <div className="flex-1 min-w-0">
   <div className="flex items-center gap-2 mb-0.5 flex-wrap">
   <span className="text-xs font-semibold text-foreground truncate">{agent.name}</span>
-  {isCurrent && <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/20">{locale === 'ar' ? 'الحالي' : 'Current'}</span>}
+  {isCurrent && <span className="text-[9px] font-bold uppercase px-1 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300 border border-violet-500/20">{t('ticketPage.current3')}</span>}
   <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded border ${agent.isAvailable ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'}`}>
-  {agent.isAvailable ? (locale === 'ar' ? 'متاح' : 'Available') : (locale === 'ar' ? 'غير متواجد' : 'Away')}
+  {agent.isAvailable ? (t('ticketPage.available')) : (t('ticketPage.away'))}
   </span>
   </div>
   {agentSkills.length > 0 && (
@@ -1089,7 +1089,7 @@ export default function TicketDetailClient({
   ) : (
   <UserCheck className="w-3.5 h-3.5" />
   )}
-  <span>{ticket.assignedTo ? (locale === 'ar' ? 'إعادة إسناد التذكرة' : 'Reassign Ticket') : (locale === 'ar' ? 'إسناد التذكرة' : 'Assign Ticket')}</span>
+  <span>{ticket.assignedTo ? (t('ticketPage.reassignTicket')) : (t('ticketPage.assignTicket'))}</span>
   </button>
   </form>
   )}
@@ -1099,12 +1099,12 @@ export default function TicketDetailClient({
  {/* TICKET PROPERTIES METADATA CARD */}
  <div className="card p-5 border-border bg-card backdrop-blur-md space-y-4">
  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
- {locale === 'ar' ? 'بيانات التذكرة' : 'Ticket Details'}
+ {t('ticketPage.ticketDetails')}
  </h3>
 
  <div className="space-y-3 text-xs">
  <div className="flex items-center justify-between py-1.5 border-b border-border">
- <span className="text-muted-foreground">{locale === 'ar' ? 'الحالة الحالية' : 'Current Status'}</span>
+ <span className="text-muted-foreground">{t('ticketPage.currentStatus')}</span>
  <span className={statusBadgeClass(ticket.status)}>
  <span className="badge-dot" />
  {getStatusLabel(ticket.status, locale)}
@@ -1112,26 +1112,26 @@ export default function TicketDetailClient({
  </div>
 
  <div className="flex items-center justify-between py-1.5 border-b border-border">
- <span className="text-muted-foreground">{locale === 'ar' ? 'الأولوية' : 'Severity'}</span>
+ <span className="text-muted-foreground">{t('ticketPage.severity')}</span>
  <span className={priorityBadgeClass(ticket.priority)}>
  {getPriorityLabel(ticket.priority, locale)}
  </span>
  </div>
 
  <div className="flex items-center justify-between py-1.5 border-b border-border">
- <span className="text-muted-foreground">{locale === 'ar' ? 'التصنيف' : 'Category'}</span>
+ <span className="text-muted-foreground">{t('ticketPage.category')}</span>
  <span className="badge badge-category">{getCategoryLabel(ticket.category, locale)}</span>
  </div>
 
  <div className="flex items-center justify-between py-1.5 border-b border-border">
- <span className="text-muted-foreground">{locale === 'ar' ? 'مقدم الطلب' : 'Submitted By'}</span>
+ <span className="text-muted-foreground">{t('ticketPage.submittedBy')}</span>
  <span className="font-semibold text-foreground">
  {ticket.createdBy.name}
  </span>
  </div>
 
  <div className="flex items-center justify-between py-1.5 border-b border-border">
- <span className="text-muted-foreground">{locale === 'ar' ? 'الوكيل المسند' : 'Assigned Specialist'}</span>
+ <span className="text-muted-foreground">{t('ticketPage.assignedSpecialist')}</span>
  <span className="font-medium text-foreground">
  {ticket.assignedTo ? (
  <span className="inline-flex items-center gap-1.5 text-indigo-800 dark:text-indigo-300 font-semibold">
@@ -1139,20 +1139,20 @@ export default function TicketDetailClient({
  {ticket.assignedTo.name}
  </span>
  ) : (
- <span className="text-muted-foreground italic">{locale === 'ar' ? 'غير مسند' : 'Unassigned'}</span>
+ <span className="text-muted-foreground italic">{t('ticketPage.unassigned')}</span>
  )}
  </span>
  </div>
 
  <div className="flex items-center justify-between py-1.5 border-b border-border">
- <span className="text-muted-foreground">{locale === 'ar' ? 'تاريخ الإنشاء' : 'Created At'}</span>
+ <span className="text-muted-foreground">{t('ticketPage.createdAt')}</span>
  <span className="text-foreground">
  {formatRelativeTime(ticket.createdAt, locale)}
  </span>
  </div>
 
  <div className="flex items-center justify-between py-1.5">
- <span className="text-muted-foreground">{locale === 'ar' ? 'آخر تحديث' : 'Last Updated'}</span>
+ <span className="text-muted-foreground">{t('ticketPage.lastUpdated')}</span>
  <span className="text-foreground">
  {formatRelativeTime(ticket.updatedAt, locale)}
  </span>

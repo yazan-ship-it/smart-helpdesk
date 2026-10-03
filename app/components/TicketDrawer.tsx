@@ -94,9 +94,9 @@ export default function TicketDrawer({
 
   const onLoadFailed = useEffectEvent((reason: 'not-found' | 'error') => {
     if (reason === 'not-found') {
-      toast.error(locale === 'ar' ? 'تعذر العثور على التذكرة أو ليس لديك صلاحية' : 'Ticket not found or unauthorized')
+      toast.error(t('drawer.ticketNotFoundOrUnauthorized'))
     } else {
-      toast.error(locale === 'ar' ? 'فشل تحميل تفاصيل التذكرة' : 'Failed to load ticket details')
+      toast.error(t('drawer.failedToLoadTicketDetails'))
     }
     onClose()
   })
@@ -133,13 +133,13 @@ export default function TicketDrawer({
           toast.error(t(`errors.${result.error}`, result.params))
           return
         }
-        toast.success(locale === 'ar' ? `تم تحديث حالة التذكرة إلى ${getStatusLabel(nextStatus, locale)}` : `Ticket marked as ${nextStatus}`)
+        toast.success(t('drawer.statusUpdatedTo', { status: getStatusLabel(nextStatus, locale) }))
         if (nextStatus === 'RESOLVED') {
           confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
         }
         await refreshTicket(ticket.id)
       } catch {
-        toast.error(locale === 'ar' ? 'فشل تحديث الحالة' : 'Failed to update status')
+        toast.error(t('drawer.failedToUpdateStatus'))
       }
     })
   }
@@ -153,10 +153,10 @@ export default function TicketDrawer({
           toast.error(t(`errors.${result.error}`, result.params))
           return
         }
-        toast.success(locale === 'ar' ? 'لقد استلمت هذه التذكرة بنجاح.' : 'You have taken over this ticket.')
+        toast.success(t('drawer.youHaveTakenOverThis'))
         await refreshTicket(ticket.id)
       } catch {
-        toast.error(locale === 'ar' ? 'فشل استلام التذكرة' : 'Failed to take over ticket')
+        toast.error(t('drawer.failedToTakeOverTicket'))
       }
     })
   }
@@ -172,11 +172,11 @@ export default function TicketDrawer({
           toast.error(t(`errors.${result.error}`, result.params))
           return
         }
-        toast.success(locale === 'ar' ? 'تمت إضافة التعليق بنجاح' : 'Comment added')
+        toast.success(t('drawer.commentAdded'))
         setCommentText('')
         await refreshTicket(ticket.id)
       } catch {
-        toast.error(locale === 'ar' ? 'فشل إضافة التعليق' : 'Failed to add comment')
+        toast.error(t('drawer.failedToAddComment'))
       }
     })
   }
@@ -223,7 +223,7 @@ export default function TicketDrawer({
                   title={t('ui.expandFullPage')}
                 >
                   <ExternalLink className="w-4 h-4 mr-1.5 rtl:mr-0 rtl:ml-1.5" />
-                  <span>{locale === 'ar' ? 'عرض الصفحة كاملة' : 'Open Full'}</span>
+                  <span>{t('drawer.openFull')}</span>
                 </Link>
               )}
             </div>
@@ -272,7 +272,7 @@ export default function TicketDrawer({
                 <div>
                   <h3 className="font-semibold text-base mb-4 flex items-center gap-2 text-foreground">
                     <MessageSquare className="w-4 h-4" />
-                    {locale === 'ar' ? 'سلسلة المحادثة' : 'Conversation Thread'}
+                    {t('drawer.conversationThread')}
                   </h3>
                   
                   <div className="space-y-4">
@@ -335,10 +335,10 @@ export default function TicketDrawer({
                        <AlertTriangle className="w-5 h-5 text-orange-600" />
                        <div>
                          <p className="font-semibold text-sm text-orange-800 dark:text-orange-300">
-                           {locale === 'ar' ? `قيد المتابعة بواسطة ${ticket.assignedTo?.name}` : `Locked by ${ticket.assignedTo?.name}`}
+                           {t('drawer.lockedBy', { name: ticket.assignedTo?.name ?? '' })}
                          </p>
                          <p className="text-xs text-orange-700/80 dark:text-orange-400/80">
-                           {locale === 'ar' ? 'استلم التذكرة لتعديل الحالة أو الرد.' : 'Take over to modify status or reply.'}
+                           {t('drawer.takeOverToModifyStatus')}
                          </p>
                        </div>
                      </div>
@@ -347,7 +347,7 @@ export default function TicketDrawer({
                        disabled={isPending}
                        className="btn btn-sm bg-orange-600 hover:bg-orange-700 text-white border-0"
                      >
-                       {isPending ? (locale === 'ar' ? 'جاري الاستلام...' : 'Taking over...') : (locale === 'ar' ? 'استلام التذكرة' : 'Take Over')}
+                       {isPending ? (t('drawer.takingOver')) : (t('drawer.takeOver'))}
                      </button>
                    </div>
                 ) : (
@@ -374,7 +374,7 @@ export default function TicketDrawer({
                         type="text"
                         value={commentText}
                         onChange={(e) => setCommentText(e.target.value)}
-                        placeholder={locale === 'ar' ? 'اكتب رسالة...' : 'Type a message...'}
+                        placeholder={t('drawer.typeAMessage')}
                         className="flex-1 bg-muted/50 border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand focus:bg-background transition-all"
                       />
                       <button
@@ -393,7 +393,7 @@ export default function TicketDrawer({
                         const nextStatuses = VALID_TRANSITIONS[ticket.status as Status] || []
                         if (nextStatuses.length === 0) return (
                           <div className="flex-1 text-center py-2 text-sm font-medium text-muted-foreground">
-                            {locale === 'ar' ? 'التذكرة مغلقة' : 'Ticket is Closed'}
+                            {t('drawer.ticketIsClosed')}
                           </div>
                         )
 
@@ -402,14 +402,14 @@ export default function TicketDrawer({
                         let buttonClass = "btn btn-primary w-full"
                         
                         if (ticket.status === 'OPEN') {
-                          buttonText = locale === 'ar' ? 'استلام وإسناد لي' : 'Claim & Assign to Me'
+                          buttonText = t('drawer.claimAssignToMe')
                         } else if (ticket.status === 'ASSIGNED') {
-                          buttonText = locale === 'ar' ? 'بدء العمل' : 'Start Progress'
+                          buttonText = t('drawer.startProgress')
                         } else if (ticket.status === 'IN_PROGRESS') {
-                          buttonText = locale === 'ar' ? 'تعيين كمنجزة' : 'Mark as Resolved'
+                          buttonText = t('drawer.markAsResolved')
                           buttonClass = "btn w-full bg-emerald-600 hover:bg-emerald-700 text-white border-0"
                         } else if (ticket.status === 'RESOLVED') {
-                          buttonText = locale === 'ar' ? 'إغلاق التذكرة' : 'Close Ticket'
+                          buttonText = t('drawer.closeTicket')
                           buttonClass = "btn w-full bg-slate-700 hover:bg-slate-800 text-white border-0"
                         }
 
@@ -419,7 +419,7 @@ export default function TicketDrawer({
                             disabled={isPending}
                             className={buttonClass}
                           >
-                            {isPending ? (locale === 'ar' ? 'جاري التحديث...' : 'Updating...') : buttonText}
+                            {isPending ? (t('drawer.updating')) : buttonText}
                           </button>
                         )
                       })()}

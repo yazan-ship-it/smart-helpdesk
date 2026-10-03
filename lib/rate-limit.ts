@@ -11,6 +11,8 @@ export const LOGIN_PER_ACCOUNT: RateLimitRule = { limit: 5, windowMs: 15 * MINUT
 export const LOGIN_PER_ADDRESS: RateLimitRule = { limit: 20, windowMs: 15 * MINUTE }
 /** Account requests per client address */
 export const REGISTER_PER_ADDRESS: RateLimitRule = { limit: 5, windowMs: 60 * MINUTE }
+/** Files uploaded per user, so one account can't fill the storage */
+export const UPLOAD_PER_USER: RateLimitRule = { limit: 30, windowMs: 60 * MINUTE }
 /** Gemini requests per user (triage, summaries, translation), so one user can't use up the quota */
 export const AI_PER_USER: RateLimitRule = { limit: 30, windowMs: 10 * MINUTE }
 

@@ -51,6 +51,7 @@ export const ERROR_CODES = [
   'upload_too_many',
   'upload_type',
   'upload_file_too_big',
+  'upload_pending_limit',
 ] as const
 
 export type ErrorCode = (typeof ERROR_CODES)[number]

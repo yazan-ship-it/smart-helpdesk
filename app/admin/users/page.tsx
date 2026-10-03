@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db'
 import { getAppSettings, parseCategories } from '@/lib/settings'
 import AdminUsersClient from './AdminUsersClient'
-import { requireAdmin } from '@/app/actions/auth'
+import { requireAdmin } from '@/lib/auth'
 
 export const metadata = { title: 'User Management | Admin' }
 

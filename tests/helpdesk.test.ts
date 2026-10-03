@@ -78,7 +78,8 @@ import TicketDetailPage from '@/app/tickets/[id]/page'
 import AdminTicketsPage from '@/app/admin/tickets/page'
 import AdminUsersPage from '@/app/admin/users/page'
 import { POST as uploadPOST } from '@/app/api/upload/route'
-import { GET as fileGET } from '@/app/api/files/[id]/route'
+import { GET as fileGET, DELETE as fileDELETE } from '@/app/api/files/[id]/route'
+import * as authActions from '@/app/actions/auth'
 import { POST as triagePOST } from '@/app/api/ai/triage/route'
 import { POST as summarizePOST } from '@/app/api/ai/summarize/[id]/route'
 
@@ -161,7 +162,7 @@ function form(fields: Record<string, string>) {
 // ─── Setup & Teardown ─────────────────────────────────
 const clearTestRateLimits = () =>
   prisma.rateLimit.deleteMany({
-    where: { OR: [{ key: { contains: String(stamp) } }, { key: { startsWith: 'login:address:203.0.113.' } }, { key: { startsWith: 'register:address:203.0.113.' } }, { key: { contains: 'unknown-' } }, { key: { in: testUserIds.map((id) => `ai:user:${id}`) } }] },
+    where: { OR: [{ key: { contains: String(stamp) } }, { key: { startsWith: 'login:address:203.0.113.' } }, { key: { startsWith: 'register:address:203.0.113.' } }, { key: { contains: 'unknown-' } }, { key: { in: testUserIds.flatMap((id) => [`ai:user:${id}`, `upload:user:${id}`]) } }] },
   })
 
 beforeAll(async () => {
@@ -1367,5 +1368,77 @@ describe('Test 16: Reopened SLA & Agents Who Leave', () => {
   let agentId: string
   beforeAll(async () => {
     agentId = await createUser('Leaving Agent', `test-leaving-agent-${stamp}@test.com`, 'IT_SUPPORT')
+  })
+})
+
+// ────────────────────────────────────────────────────────
+// TEST 17: Audit fixes — exposed guards, sign-in timing, upload limits
+// ────────────────────────────────────────────────────────
+describe('Test 17: Audit Fixes', () => {
+  const deleteFile = (id: string) => fileDELETE(new NextRequest(`http://localhost/api/files/${id}`, { method: 'DELETE' }), { params: Promise.resolve({ id }) })
+
+  it("auth guards are not exported from a 'use server' file (where every export is a public endpoint)", () => {
+    expect(Object.keys(authActions)).not.toEqual(expect.arrayContaining(['requireAuth']))
+    expect(Object.keys(authActions).filter((k) => k.startsWith('require'))).toEqual([])
+  })
+
+  it('an unknown email still pays for a password check, so it takes as long as a wrong password', async () => {
+    vi.mocked(headers).mockResolvedValue(new Headers({ 'x-forwarded-for': '203.0.113.30' }) as never)
+    const compare = vi.spyOn(bcrypt, 'compare')
+    try {
+      expect(await login(undefined, form({ email: `nobody-${stamp}@test.com`, password: 'whatever-123' }))).toEqual({ error: 'invalid_credentials' })
+      expect(compare).toHaveBeenCalledTimes(1)
+    } finally {
+      compare.mockRestore()
+    }
+  })
+
+  it('an account request for a registered email still hashes the password', async () => {
+    vi.mocked(headers).mockResolvedValue(new Headers({ 'x-forwarded-for': '203.0.113.31' }) as never)
+    const hash = vi.spyOn(bcrypt, 'hash')
+    try {
+      expect(await register(undefined, form({ name: 'Someone', email: employeeEmail, password: 'long-enough-1', role: 'EMPLOYEE' }))).toEqual({ success: true })
+      expect(hash).toHaveBeenCalledTimes(1)
+    } finally {
+      hash.mockRestore()
+    }
+  })
+
+  it('a user can have at most 10 uploads waiting, and removing one frees a place', async () => {
+    const uploader = await createUser('Uploader', `test-uploader-${stamp}@test.com`, 'EMPLOYEE')
+    signInAs(uploader, 'EMPLOYEE')
+    const ids: string[] = []
+    for (let i = 0; i < 10; i++) ids.push(await uploadPng(`shot-${i}.png`))
+
+    const res = await uploadPOST(uploadRequest(new File(['x'], 'one-more.png', { type: 'image/png' })))
+    expect(res.status).toBe(429)
+    expect(await res.json()).toEqual({ error: 'upload_pending_limit', params: { max: 10 } })
+
+    expect((await deleteFile(ids[0])).status).toBe(204)
+    expect(await prisma.attachment.findUnique({ where: { id: ids[0] } })).toBeNull()
+    await uploadPng('one-more.png')
+  })
+
+  it('a user can upload at most 30 files an hour', async () => {
+    const uploader = await createUser('Busy Uploader', `test-busy-uploader-${stamp}@test.com`, 'EMPLOYEE')
+    await prisma.rateLimit.create({ data: { key: `upload:user:${uploader}`, count: 30, windowStart: new Date() } })
+    signInAs(uploader, 'EMPLOYEE')
+    const res = await uploadPOST(uploadRequest(new File(['x'], 'a.png', { type: 'image/png' })))
+    expect(res.status).toBe(429)
+    expect(await res.json()).toMatchObject({ error: 'too_many_attempts' })
+  })
+
+  it("only the uploader can delete an upload, and never once it belongs to a ticket", async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const pending = await uploadPng('mine.png')
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect((await deleteFile(pending)).status).toBe(404)
+
+    signInAs(employeeId, 'EMPLOYEE')
+    await expect(
+      createTicket(undefined, form({ title: 'Ticket with a kept file', description: 'This file must stay with the ticket.', category: 'Network', attachmentIds: JSON.stringify([pending]) })),
+    ).rejects.toThrow('NEXT_REDIRECT')
+    expect((await deleteFile(pending)).status).toBe(404)
+    expect(await prisma.attachment.findUnique({ where: { id: pending } })).not.toBeNull()
   })
 })

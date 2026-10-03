@@ -875,6 +875,7 @@ export const en = {
     upload_too_many: 'You can upload up to {max} files at a time.',
     upload_type: 'This file type is not allowed: {name}',
     upload_file_too_big: 'This file is larger than {max} MB: {name}',
+    upload_pending_limit: 'You have {max} files waiting to be attached. Submit or clear your ticket first.',
   },
   language: {
     toggle: 'العربية',

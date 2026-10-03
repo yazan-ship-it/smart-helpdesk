@@ -286,7 +286,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ## ☁️ Deployment (Vercel + Neon)
 
 1. **Database:** create a project on [Neon](https://neon.tech). Copy the *pooled* connection string (host contains `-pooler`) and add `&pgbouncer=true` to it, plus the *direct* one.
-2. **Vercel project:** import the GitHub repository on [Vercel](https://vercel.com). Vercel runs `npm run vercel-build`, which applies pending migrations and builds.
+2. **Vercel project:** import the GitHub repository on [Vercel](https://vercel.com). Vercel runs `npm run vercel-build`, which applies pending migrations and builds. `vercel.json` runs the app in Frankfurt (`fra1`), next to the database; if your Neon project is in another region, change it to match, or every query crosses an ocean.
 3. **Environment variables** (Project → Settings → Environment Variables): `DATABASE_URL` (pooled), `DIRECT_URL` (direct), `SESSION_SECRET`, `GEMINI_API_KEY`, and `DEMO_MODE` if this is a demo.
 4. **Attachments:** Storage → create a **Blob** store with **private** access and connect it to the project (this sets `BLOB_READ_WRITE_TOKEN`).
 5. **Deploy**, then load the demo data once from your machine with the Neon *direct* URL: `DATABASE_URL=... npm run db:seed`.

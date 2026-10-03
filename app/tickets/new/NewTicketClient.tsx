@@ -149,7 +149,19 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
     }
   }
 
+  // Taking a file off the form also deletes the upload, so it doesn't count
+  // against the user's limit of files waiting to be attached
+  const discardUploads = (ids: string[]) => {
+    for (const id of ids) fetch(`/api/files/${id}`, { method: 'DELETE' }).catch(() => {})
+  }
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id))
+    discardUploads([id])
+  }
+
   const resetForm = () => {
+    discardUploads(attachments.map((a) => a.id))
     setTitle('')
     setDescription('')
     setCategory('')
@@ -312,7 +324,7 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
                         </span>
                         <button
                           type="button"
-                          onClick={() => setAttachments((prev) => prev.filter((a) => a.url !== att.url))}
+                          onClick={() => removeAttachment(att.id)}
                           className="p-1 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-muted transition-colors"
                           aria-label={t('newTicket.removeAttachment')}
                         >

@@ -46,3 +46,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
   return new Response(body, { headers })
 }
+
+/**
+ * Removes an upload its owner took off the form before submitting. Files that
+ * already belong to a ticket stay, so the ticket's record is never changed.
+ */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  const file = await prisma.attachment.findFirst({
+    where: { id, uploadedById: session.userId, ticketId: null },
+    select: { id: true, storageKey: true },
+  })
+  if (!file) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+
+  await prisma.attachment.delete({ where: { id: file.id } })
+  await getStorage().delete(file.storageKey)
+  return new Response(null, { status: 204 })
+}

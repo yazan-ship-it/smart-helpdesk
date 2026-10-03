@@ -3,7 +3,7 @@
 import bcrypt from 'bcryptjs'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db'
-import { createSession, deleteSession, getSession, type Role } from '@/lib/session'
+import { createSession, deleteSession, type Role } from '@/lib/session'
 import {
   clearAttempts,
   clientAddress,
@@ -14,6 +14,12 @@ import {
   retryAfter,
 } from '@/lib/rate-limit'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@/lib/passwords'
+
+/**
+ * Compared against when the email is unknown, so a failed sign-in takes as long
+ * whether or not the account exists (bcrypt is the slow part). Same cost as real hashes.
+ */
+const DUMMY_PASSWORD_HASH = '$2b$12$F1IhPoWwdRPE23ZWJFjbv.9/RDACL4MJLGO8fhQaOrXMNX2rY6c2a'
 
 /** Error codes; the login page shows them in the user's language */
 export type LoginError =
@@ -54,8 +60,10 @@ export async function login(prevState: AuthState, formData: FormData): Promise<A
   if (wait > 0) return { error: 'too_many_attempts', retryAfterMinutes: Math.ceil(wait / 60_000) }
 
   const user = await prisma.user.findUnique({ where: { email } })
-  // Same error for unknown email and wrong password, so accounts can't be enumerated
-  if (!user || !(await bcrypt.compare(password, user.password))) {
+  // Same error, and the same time, for an unknown email and a wrong password,
+  // so accounts can't be enumerated
+  const passwordOk = await bcrypt.compare(password, user?.password ?? DUMMY_PASSWORD_HASH)
+  if (!user || !passwordOk) {
     await recordAttempt(accountKey, LOGIN_PER_ACCOUNT)
     await recordAttempt(addressKey, LOGIN_PER_ADDRESS)
     return { error: 'invalid_credentials' }
@@ -110,14 +118,15 @@ export async function register(prevState: RegisterState, formData: FormData): Pr
   if (wait > 0) return { error: 'too_many_attempts', retryAfterMinutes: Math.ceil(wait / 60_000) }
   await recordAttempt(addressKey, REGISTER_PER_ADDRESS)
 
-  // An existing email gets the same answer as a new one, so the form can't be used
-  // to find out who has an account (the login form gives nothing away either)
-  const existing = await prisma.user.findUnique({ where: { email } })
+  // Hash first: an existing email then gets the same answer, after the same time,
+  // as a new one, so the form can't be used to find out who has an account
+  const hashedPassword = await bcrypt.hash(password, 12)
+  const [existing, settings] = await Promise.all([
+    prisma.user.findUnique({ where: { email } }),
+    prisma.appSettings.findUnique({ where: { id: 'singleton' } }),
+  ])
   if (existing) return { success: true }
 
-  const hashedPassword = await bcrypt.hash(password, 12)
-
-  const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
   const autoApproveDomain = settings?.autoApproveDomain || '@company.com'
   const isAutoApprove = email.endsWith(autoApproveDomain) && role === 'EMPLOYEE'
   const accountStatus = isAutoApprove ? 'APPROVED' : 'PENDING'
@@ -141,29 +150,4 @@ export async function register(prevState: RegisterState, formData: FormData): Pr
 export async function logout(): Promise<void> {
   await deleteSession()
   redirect('/login')
-}
-
-// ─── Auth Helpers ─────────────────────────────────────────────────────────────
-export async function requireAuth() {
-  const session = await getSession()
-  if (!session) {
-    redirect('/login')
-  }
-  return session
-}
-
-export async function requireRole(role: 'IT_SUPPORT' | 'EMPLOYEE') {
-  const session = await requireAuth()
-  if (session.role !== role) {
-    redirect('/tickets')
-  }
-  return session
-}
-
-export async function requireAdmin() {
-  const session = await requireAuth()
-  if (session.role !== 'ADMIN') {
-    redirect('/tickets')
-  }
-  return session
 }

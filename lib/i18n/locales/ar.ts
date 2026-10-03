@@ -877,6 +877,7 @@ export const ar: TranslationDictionary = {
     upload_too_many: 'يمكنك رفع {max} ملفات كحد أقصى في المرة الواحدة.',
     upload_type: 'نوع الملف غير مسموح: {name}',
     upload_file_too_big: 'الملف أكبر من {max} ميغابايت: {name}',
+    upload_pending_limit: 'عندك {max} ملفات بانتظار إرفاقها. أرسل التذكرة أو احذف المرفقات أولاً.',
   },
   language: {
     toggle: 'English',

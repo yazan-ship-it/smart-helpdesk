@@ -8,6 +8,8 @@ export const MAX_FILES = 5
  */
 export const MAX_FILE_SIZE_MB = 4
 export const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
+/** Uploads a user may have waiting to be attached to a ticket */
+export const MAX_PENDING_UPLOADS = 10
 
 // The stored type (and so the Content-Type the file is served with) comes from
 // the extension. Only allow types that browsers will not execute (no .html, .svg, .js ...).

@@ -3,6 +3,10 @@
 
 An enterprise-grade IT Support Ticket Management System built with **Next.js 16 (App Router)**, **TypeScript**, **Prisma ORM + PostgreSQL**, **Tailwind CSS**, and **Google Gemini** (`gemini-2.5-flash` by default) for ticket triage suggestions, ticket summaries for IT staff, and on-demand translation.
 
+**Live demo:** https://smart-helpdesk-tan.vercel.app (one-click demo logins for each role)
+
+**Built with AI coding tools:** Antigravity IDE with Claude 3.5 Sonnet and Gemini for the first version, then Claude Code for the review and rework. [AI-USAGE.md](AI-USAGE.md) explains what was delegated, what I decided, and how the generated code was validated.
+
 ---
 
 ## 📑 Table of Contents
@@ -669,7 +673,7 @@ smart-helpdesk/
 │   └── seed.js                # npm run db:seed
 ├── .github/workflows/ci.yml   # Lint, types, tests (PostgreSQL) and build on every push
 ├── tests/                     # 160 Vitest tests (5 files)
-├── AI-USAGE.md                # AI transparency & ethics documentation
+├── AI-USAGE.md                # How AI tools were used and how their output was checked
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
 ```
@@ -691,6 +695,7 @@ smart-helpdesk/
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
 | **Automated Testing** | 160 unit & integration tests against the real code, all passing | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
+| **AI Usage Report** | [AI-USAGE.md](AI-USAGE.md): tools, delegated vs. decided work, validation, AI mistakes caught, rejected proposals | ✅ Complete |
 
 ---
 

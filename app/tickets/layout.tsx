@@ -20,46 +20,35 @@ export default async function TicketsLayout({
   const cookieStore = await cookies()
   const locale = (cookieStore.get('helpdesk-lang')?.value === 'ar' ? 'ar' : 'en') as 'en' | 'ar'
   const t = createTranslator(locale)
-  const brandName = getBrandName((await getAppSettings())?.appName, locale)
-
-  // Fetch counts
   const userId = session?.userId
-
   const baseWhere = session?.role === 'EMPLOYEE' ? { createdById: userId } : {}
+  const unfinished = { notIn: ['RESOLVED', 'CLOSED'] }
 
-  const [
-    assignedToMe,
-    unassigned,
-    critical,
-    hardware,
-    software,
-    network,
-    email,
-    access,
-    other,
-    printer,
-  ] = await Promise.all([
-    prisma.ticket.count({ where: { ...baseWhere, assignedToId: userId, status: { notIn: ['RESOLVED', 'CLOSED'] } } }),
+  // Everything the sidebar needs, in one round trip to the database
+  const [settings, assignedToMe, unassigned, critical, byCategory, agent] = await Promise.all([
+    getAppSettings(),
+    prisma.ticket.count({ where: { ...baseWhere, assignedToId: userId, status: unfinished } }),
     prisma.ticket.count({ where: { assignedToId: null, status: 'OPEN' } }),
-    prisma.ticket.count({ where: { priority: 'CRITICAL', status: { notIn: ['RESOLVED', 'CLOSED'] } } }),
-    prisma.ticket.count({ where: { ...baseWhere, category: 'Hardware' } }),
-    prisma.ticket.count({ where: { ...baseWhere, category: 'Software' } }),
-    prisma.ticket.count({ where: { ...baseWhere, category: 'Network' } }),
-    prisma.ticket.count({ where: { ...baseWhere, OR: [{ category: 'Email' }, { category: 'Email & Communication' }] } }),
-    prisma.ticket.count({ where: { ...baseWhere, OR: [{ category: 'Access Issue' }, { category: 'Access & Permissions' }] } }),
-    prisma.ticket.count({ where: { ...baseWhere, category: 'Other' } }),
-    prisma.ticket.count({ where: { ...baseWhere, category: 'Printer' } }),
+    prisma.ticket.count({ where: { priority: 'CRITICAL', status: unfinished } }),
+    // One grouped count instead of a query per category
+    prisma.ticket.groupBy({ by: ['category'], where: baseWhere, _count: { _all: true } }),
+    session?.role === 'IT_SUPPORT' && userId
+      ? prisma.user.findUnique({ where: { id: userId }, select: { isAvailable: true } })
+      : null,
   ])
+  const brandName = getBrandName(settings?.appName, locale)
+  const agentAvailability = agent?.isAvailable ?? true
 
-  // Get current agent's availability
-  let agentAvailability = true
-  if (session?.role === 'IT_SUPPORT' && userId) {
-    const agent = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { isAvailable: true },
-    })
-    agentAvailability = agent?.isAvailable ?? true
-  }
+  // Older tickets may still use the previous names of two categories
+  const countOf = (...names: string[]) =>
+    byCategory.filter((g) => names.includes(g.category)).reduce((sum, g) => sum + g._count._all, 0)
+  const hardware = countOf('Hardware')
+  const software = countOf('Software')
+  const network = countOf('Network')
+  const email = countOf('Email', 'Email & Communication')
+  const access = countOf('Access Issue', 'Access & Permissions')
+  const other = countOf('Other')
+  const printer = countOf('Printer')
 
   if (session?.role === 'EMPLOYEE') {
     return (

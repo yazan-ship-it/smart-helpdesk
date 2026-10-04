@@ -24,38 +24,32 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     redirect('/login')
   }
 
-  const settings = await getAppSettings()
+  const overdue = { status: { notIn: ['RESOLVED', 'CLOSED'] }, slaDeadline: { lt: new Date() } }
+
+  // Independent queries run together: one round trip to the database instead of six
+  const [settings, db, pendingApprovals, pendingApprovalsCount, slaBreaches, slaBreachesCount] = await Promise.all([
+    getAppSettings(),
+    // Real health check: time a trivial query
+    checkDatabase(),
+    prisma.user.findMany({
+      where: { accountStatus: 'PENDING' },
+      select: { id: true, name: true, email: true },
+      orderBy: { createdAt: 'desc' },
+      take: 4,
+    }),
+    prisma.user.count({ where: { accountStatus: 'PENDING' } }),
+    prisma.ticket.findMany({
+      where: overdue,
+      select: { id: true, ticketNumber: true, title: true, slaDeadline: true },
+      orderBy: { slaDeadline: 'asc' },
+      take: 4,
+    }),
+    prisma.ticket.count({ where: overdue }),
+  ])
   const brandName = getBrandName(settings?.appName, locale)
-
-  // Real health checks: time a trivial query, and report the AI configuration as it is
-  const { ok: dbOk, latencyMs: dbLatencyMs } = await checkDatabase()
+  const { ok: dbOk, latencyMs: dbLatencyMs } = db
+  // Report the AI configuration as it is
   const aiState = !isAiConfigured() ? 'missing' : settings && !settings.enableAiTriage ? 'disabled' : 'configured'
-
-  const pendingApprovals = await prisma.user.findMany({
-    where: { accountStatus: 'PENDING' },
-    select: { id: true, name: true, email: true },
-    orderBy: { createdAt: 'desc' },
-    take: 4
-  })
-  const pendingApprovalsCount = await prisma.user.count({
-    where: { accountStatus: 'PENDING' }
-  })
-  
-  const slaBreaches = await prisma.ticket.findMany({
-    where: {
-      status: { notIn: ['RESOLVED', 'CLOSED'] },
-      slaDeadline: { lt: new Date() }
-    },
-    select: { id: true, ticketNumber: true, title: true, slaDeadline: true },
-    orderBy: { slaDeadline: 'asc' },
-    take: 4
-  })
-  const slaBreachesCount = await prisma.ticket.count({
-    where: {
-      status: { notIn: ['RESOLVED', 'CLOSED'] },
-      slaDeadline: { lt: new Date() }
-    }
-  })
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg-base)' }}>

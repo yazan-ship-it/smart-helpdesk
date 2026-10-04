@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { prisma } from '@/lib/db'
 
 export const DEFAULT_CATEGORIES = [
@@ -11,9 +12,8 @@ export const DEFAULT_CATEGORIES = [
   'Other',
 ]
 
-export async function getAppSettings() {
-  return prisma.appSettings.findUnique({ where: { id: 'singleton' } })
-}
+/** The settings row, read once per request however many components ask for it */
+export const getAppSettings = cache(async () => prisma.appSettings.findUnique({ where: { id: 'singleton' } }))
 
 /** The admin-managed ticket categories, falling back to the defaults. */
 export function parseCategories(categoriesList: string | null | undefined): string[] {

@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import { toAttachmentInfo } from '@/lib/uploads'
-import { parseCannedResponses } from '@/lib/settings'
+import { getAppSettings, parseCannedResponses } from '@/lib/settings'
 import TicketDetailClient, { type TicketDetailData } from '@/app/tickets/[id]/TicketDetailClient'
 
 export default async function AdminTicketDetailPage({
@@ -16,7 +16,9 @@ export default async function AdminTicketDetailPage({
    redirect('/login')
  }
 
- const ticket = await prisma.ticket.findUnique({
+ // The ticket, the agents to assign it to and the settings, in one round trip
+ const [ticket, itAgents, settings] = await Promise.all([
+ prisma.ticket.findUnique({
  where: { id },
  include: {
  createdBy: { select: { id: true, name: true, email: true } },
@@ -31,16 +33,16 @@ export default async function AdminTicketDetailPage({
  },
  attachments: { select: { id: true, name: true, size: true, type: true }, orderBy: { createdAt: 'asc' } },
  },
- })
+ }),
+ prisma.user.findMany({
+ where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
+ select: { id: true, name: true, skills: true, isAvailable: true },
+ }),
+ getAppSettings(),
+ ])
 
  if (!ticket) notFound()
 
- const itAgents = await prisma.user.findMany({
-   where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
-   select: { id: true, name: true, skills: true, isAvailable: true },
- })
-
- const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
  const cannedResponses = parseCannedResponses(settings?.cannedResponses)
 
  const serializedTicket: TicketDetailData = {

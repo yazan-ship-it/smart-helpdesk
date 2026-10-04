@@ -570,6 +570,7 @@ export const ar: TranslationDictionary = {
     privateInternalNoteItOnly: '🔒 ملاحظة داخلية خاصة (لفريق الدعم فقط)',
     typePrivateTechnicalNotes: 'اكتب ملاحظات فنية داخلية خاصة...',
     typeDiagnosticNotesRequesterReply: 'اكتب ملاحظات التشخيص، أو الرد على مقدم الطلب، أو تفاصيل الحل…',
+    replyToSupport: 'اكتب ردك لفريق الدعم…',
     posting: 'جاري الإرسال...',
     postResponse: 'إرسال الرد',
     itSpecialistActions: 'إجراءات أخصائي الدعم',

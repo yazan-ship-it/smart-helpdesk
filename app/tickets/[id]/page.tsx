@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import { toAttachmentInfo } from '@/lib/uploads'
-import { parseCannedResponses } from '@/lib/settings'
+import { getAppSettings, parseCannedResponses } from '@/lib/settings'
 import TicketDetailClient, { type TicketDetailData } from './TicketDetailClient'
 import type { Metadata } from 'next'
 import { formatTicketNumber } from '@/lib/utils'
@@ -23,7 +23,11 @@ export default async function TicketDetailPage({
  const session = await getSession()
  if (!session) return null
 
- const ticket = await prisma.ticket.findUnique({
+ const isStaff = session.role === 'IT_SUPPORT' || session.role === 'ADMIN'
+
+ // The ticket, the agents to assign it to and the settings, in one round trip
+ const [ticket, itAgents, settings] = await Promise.all([
+ prisma.ticket.findUnique({
  where: { id },
  include: {
  createdBy: { select: { id: true, name: true, email: true } },
@@ -39,7 +43,15 @@ export default async function TicketDetailPage({
  },
  attachments: { select: { id: true, name: true, size: true, type: true }, orderBy: { createdAt: 'asc' } },
  },
+ }),
+ isStaff
+ ? prisma.user.findMany({
+ where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
+ select: { id: true, name: true, skills: true, isAvailable: true },
  })
+ : Promise.resolve([]),
+ getAppSettings(),
+ ])
 
  if (!ticket) notFound()
 
@@ -48,15 +60,6 @@ export default async function TicketDetailPage({
  notFound()
  }
 
- const itAgents =
- (session.role === 'IT_SUPPORT' || session.role === 'ADMIN')
- ? await prisma.user.findMany({
- where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
- select: { id: true, name: true, skills: true, isAvailable: true },
- })
- : []
-
- const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
  const cannedResponses = parseCannedResponses(settings?.cannedResponses)
 
  const serializedTicket: TicketDetailData = {

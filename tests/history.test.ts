@@ -82,4 +82,12 @@ describe('ticket audit trail', () => {
     const { action } = historyData(e, 'Mike Davis')
     expect(legacyEventColumns(action)).toEqual({ event: 'taken_over', meta: JSON.stringify({ from: 'Bob Williams' }) })
   })
+
+  it('the queued ticket in the seed data keeps its category', () => {
+    // prisma/seed.ts writes this sentence for ticket #107
+    expect(parseLegacyAction('No available specialist found for Access & Permissions — ticket queued in unassigned')).toEqual({
+      type: 'queued_unassigned',
+      category: 'Access & Permissions',
+    })
+  })
 })

@@ -568,6 +568,7 @@ export const en = {
     privateInternalNoteItOnly: '🔒 Private Internal Note (IT Only)',
     typePrivateTechnicalNotes: 'Type private technical notes...',
     typeDiagnosticNotesRequesterReply: 'Type diagnostic notes, requester reply, or resolution details…',
+    replyToSupport: 'Write a reply to the support team…',
     posting: 'Posting…',
     postResponse: 'Post Response',
     itSpecialistActions: 'IT Specialist Actions',

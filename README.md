@@ -306,7 +306,7 @@ npm test
 npm run test:watch
 ```
 
-### Test Coverage Breakdown (139/139 Passing)
+### Test Coverage Breakdown (149/149 Passing)
 
 ```
 ✓ tests/ai-triage.test.ts (10 tests)
@@ -330,7 +330,7 @@ npm run test:watch
     ✓ fails when every model is rate-limited, so callers can fall back honestly
     ✓ disables thinking on 2.5 models for speed
     ✓ rejects a triage answer with a category the admin does not have
-✓ tests/helpdesk.test.ts (106 tests)
+✓ tests/helpdesk.test.ts (115 tests)
   ✓ Test 1: User Login (7)
     ✓ valid credentials create a session for the user and redirect to their tickets
     ✓ IT_SUPPORT is redirected to their assigned queue
@@ -373,9 +373,9 @@ npm run test:watch
   ✓ Test 6: API Authentication & Upload Safety (7)
     ✓ upload rejects unauthenticated requests
     ✓ upload rejects HTML and SVG files that browsers would execute
-    ✓ upload rejects files larger than 10 MB
+    ✓ upload rejects files larger than 4 MB (the hosting limit per request)
     ✓ upload rejects more than 5 files at once
-    ✓ upload stores an allowed file under a random name with the server-side type
+    ✓ upload stores an allowed file privately, under a random name, with the server-side type
     ✓ AI triage route rejects unauthenticated requests without calling Gemini
     ✓ translateAction rejects unauthenticated callers without calling Gemini
   ✓ Test 7: AI Features (6)
@@ -430,14 +430,10 @@ npm run test:watch
     ✓ allows the account again once the 15-minute window has passed
     ✓ a successful sign-in resets the count of failures
     ✓ locks out an address that tries many accounts
-  ✓ Test 13: Server-side Validation (16)
+  ✓ Test 13: Server-side Validation (12)
     ✓ a ticket needs one of the admin categories and a real priority
-    ✓ rejects attachments with a link to another site
-    ✓ rejects attachments with a path outside the uploads folder
-    ✓ rejects attachments with a file type that is not allowed
-    ✓ rejects attachments with more than 5 files
-    ✓ rejects attachments with something that is not a list
-    ✓ stores uploaded attachments with the type taken from the file, not the browser
+    ✓ a ticket can only use the requester's own uploads that are not attached elsewhere
+    ✓ attachments are only served to people who may see the ticket
     ✓ tickets created at the same moment still get different numbers
     ✓ tickets can only be given to active IT support staff
     ✓ a closed ticket cannot be taken over or reassigned
@@ -451,8 +447,24 @@ npm run test:watch
     ✓ counts each AI request against the user
     ✓ over the limit, triage answers with the keyword rules without calling Gemini
     ✓ over the limit, summaries and translation are refused
-✓ tests/history.test.ts (13 tests)
-  ✓ ticket audit trail (13)
+  ✓ Test 15: Review Fixes (3)
+    ✓ the users page checks for an admin itself, not only in the layout
+    ✓ claiming an unassigned ticket is logged as a claim, not "taken over from Unassigned"
+    ✓ canned replies are read safely from the settings
+  ✓ Test 16: Reopened SLA & Agents Who Leave (4)
+    ✓ a reopened ticket gets a fresh SLA deadline but keeps an earlier breach
+    ✓ when an agent is suspended, their unfinished tickets go back to the queue
+    ✓ when an agent is made an employee, their unfinished tickets go back to the queue
+    ✓ approving or keeping an agent does not touch their tickets
+  ✓ Test 17: Audit Fixes (6)
+    ✓ auth guards are not exported from a 'use server' file (where every export is a public endpoint)
+    ✓ an unknown email still pays for a password check, so it takes as long as a wrong password
+    ✓ an account request for a registered email still hashes the password
+    ✓ a user can have at most 10 uploads waiting, and removing one frees a place
+    ✓ a user can upload at most 30 files an hour
+    ✓ only the uploader can delete an upload, and never once it belongs to a ticket
+✓ tests/history.test.ts (14 tests)
+  ✓ ticket audit trail (14)
     ✓ stores the event, its data and an English sentence
     ✓ shows events in the viewer’s language with translated statuses
     ✓ has a translation for every event type in both languages
@@ -466,6 +478,7 @@ npm run test:watch
     ✓ recognises the old sentence "Ticket reopened by requester. Reason: still broken"
     ✓ recognises the old sentence "CSAT Rating submitted: 5 Stars"
     ✓ round-trips: every sentence the app writes can be recognised again
+    ✓ the queued ticket in the seed data keeps its category
 ✓ tests/skills.test.ts (4 tests)
   ✓ agent skills (4)
     ✓ maps the old short names to the current category names and removes duplicates
@@ -527,7 +540,7 @@ smart-helpdesk/
 │   ├── run-ts.js              # Run TypeScript files with plain Node
 │   └── seed.js                # npm run db:seed
 ├── .github/workflows/ci.yml   # Lint, types, tests (PostgreSQL) and build on every push
-├── tests/                     # 139 Vitest tests (5 files)
+├── tests/                     # 149 Vitest tests (5 files)
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
@@ -548,7 +561,7 @@ smart-helpdesk/
 | **Bilingual Localization** | Native Arabic (RTL) & English (LTR) language support with persistent cookies/localStorage | ✅ Complete |
 | **Analytics Dashboard** | KPI cards, SLA countdown badges and status chart; the list refreshes every 30s | ✅ Complete |
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
-| **Automated Testing** | 139 unit & integration tests against the real code, all passing | ✅ Complete |
+| **Automated Testing** | 149 unit & integration tests against the real code, all passing | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
 
 ---

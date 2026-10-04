@@ -849,9 +849,11 @@ export default function TicketDetailClient({
  rows={3}
  value={commentText}
  onChange={(e) => setCommentText(e.target.value)}
- placeholder={isInternalNote 
-    ? (t('ticketPage.typePrivateTechnicalNotes')) 
-    : (t('ticketPage.typeDiagnosticNotesRequesterReply'))}
+ placeholder={t(
+    isInternalNote ? 'ticketPage.typePrivateTechnicalNotes'
+    : isITSupport ? 'ticketPage.typeDiagnosticNotesRequesterReply'
+    : 'ticketPage.replyToSupport'
+ )}
  className={`w-full rounded-xl p-3 text-sm outline-none transition-all focus:ring-2 resize-none ${isInternalNote ? 'bg-amber-500/5 border-amber-500/30 text-amber-900 dark:text-amber-100 placeholder:text-amber-700/50 focus:border-amber-500/60 focus:ring-amber-500/20 hover:border-amber-500/40' : 'bg-background dark:bg-background border border-border text-foreground dark:text-foreground placeholder:text-muted-foreground focus:border-indigo-500/60 focus:ring-indigo-500/20 hover:border-border'}`}
  disabled={isPendingComment}
  onKeyDown={(e) => {

@@ -241,7 +241,7 @@ async function main() {
     { ticketId: ticket6.id, userId: mike.id, action: 'Status changed: RESOLVED → CLOSED' },
 
     { ticketId: ticket7.id, userId: employee.id, action: 'Ticket #107 created' },
-    { ticketId: ticket7.id, userId: employee.id, action: 'No available specialist found — ticket queued in unassigned' },
+    { ticketId: ticket7.id, userId: employee.id, action: 'No available specialist found for Access & Permissions — ticket queued in unassigned' },
 
     { ticketId: ticket8.id, userId: employee.id, action: 'Ticket #108 created' },
     { ticketId: ticket8.id, userId: employee.id, action: 'System auto-assigned ticket to Bob Williams based on category (Printer)' },

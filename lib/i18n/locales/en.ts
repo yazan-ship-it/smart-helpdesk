@@ -494,6 +494,11 @@ export const en = {
     manageSystemConfigurationsDefaultsAnd: 'Manage system configurations, defaults, and notifications.',
   },
   ticketList: {
+    showingOf: 'Showing {shown} of {total} tickets',
+    rangeAll: 'All Time',
+    rangeToday: 'Today',
+    rangeWeek: 'Past 7 Days',
+    rangeMonth: 'Past 30 Days',
     open: 'Open',
     assigned: 'Assigned',
     inProgress: 'In Progress',

@@ -29,6 +29,7 @@ export default async function AdminTicketsPage(props: { searchParams: Promise<{ 
   const agents: { id: string; name: string }[] = await prisma.user.findMany({
     where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
     select: { id: true, name: true },
+    orderBy: { name: 'asc' },
   })
 
   const serialized = tickets.map((t) => ({

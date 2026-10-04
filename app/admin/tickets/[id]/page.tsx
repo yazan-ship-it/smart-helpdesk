@@ -37,6 +37,7 @@ export default async function AdminTicketDetailPage({
  prisma.user.findMany({
  where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
  select: { id: true, name: true, skills: true, isAvailable: true },
+ orderBy: { name: 'asc' },
  }),
  getAppSettings(),
  ])

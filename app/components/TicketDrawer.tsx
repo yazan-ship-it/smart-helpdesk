@@ -15,36 +15,9 @@ import AiTranslateButton from '@/app/components/AiTranslateButton'
 import AiTicketSummary from '@/app/components/AiTicketSummary'
 import type { CannedResponse } from '@/lib/settings'
 import { NEXT_STATUSES, type Status } from '@/lib/ticket-status'
+import { getInitials, priorityBadgeClass, statusBadgeClass, type Priority } from '@/lib/ticket-display'
 
 type TicketDetails = NonNullable<Awaited<ReturnType<typeof getTicketDetails>>>
-type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-
-function statusBadgeClass(s: Status) {
-  switch (s) {
-    case 'OPEN': return 'badge badge-open'
-    case 'ASSIGNED': return 'badge badge-assigned'
-    case 'IN_PROGRESS': return 'badge badge-in-progress'
-    case 'RESOLVED': return 'badge badge-resolved'
-    case 'CLOSED': return 'badge badge-closed'
-  }
-}
-
-function priorityBadgeClass(p: Priority) {
-  switch (p) {
-    case 'LOW': return 'badge badge-low'
-    case 'MEDIUM': return 'badge badge-medium'
-    case 'HIGH': return 'badge badge-high'
-    case 'CRITICAL': return 'badge badge-critical'
-  }
-}
-
-function getInitials(name: string) {
-  if (!name) return 'U'
-  const parts = name.trim().split(' ')
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
-
 export default function TicketDrawer({
   ticketId,
   isOpen,

@@ -59,6 +59,7 @@ export default async function TicketsPage(props: {
     agents = await prisma.user.findMany({
       where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
       select: { id: true, name: true },
+      orderBy: { name: 'asc' },
     })
   }
 

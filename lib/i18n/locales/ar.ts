@@ -496,6 +496,11 @@ export const ar: TranslationDictionary = {
     manageSystemConfigurationsDefaultsAnd: 'إدارة إعدادات النظام، القيم الافتراضية، والإشعارات',
   },
   ticketList: {
+    showingOf: 'عرض {shown} من {total} تذكرة',
+    rangeAll: 'كافة الأوقات',
+    rangeToday: 'اليوم',
+    rangeWeek: 'آخر 7 أيام',
+    rangeMonth: 'آخر 30 يوماً',
     open: 'مفتوحة',
     assigned: 'مسندة',
     inProgress: 'قيد العمل',

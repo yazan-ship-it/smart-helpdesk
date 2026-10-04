@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/db'
 import { getAppSettings, parseCannedResponses } from '@/lib/settings'
+import { loadTicketPage, parseTicketFilters } from '@/lib/ticket-query'
 import TicketListClient from './TicketListClient'
 
 export const metadata = { title: 'Tickets' }
@@ -13,10 +14,7 @@ export default async function TicketsPage(props: {
   const session = await getSession()
   if (!session) return null
 
-
-
   const isITSupport = session.role === 'IT_SUPPORT'
-
   const isAdmin = session.role === 'ADMIN'
 
   // Default Landing Queue for IT Support:
@@ -30,58 +28,50 @@ export default async function TicketsPage(props: {
     searchParams?.queue === 'assigned_to_me' ||
     searchParams?.assignedToMe === 'true'
 
-  const tickets = await prisma.ticket.findMany({
-    where: isAdmin 
-      ? {} 
-      : isITSupport
-        ? (isAssignedToMeQueue ? { assignedToId: session.userId } : {})
-        : { createdById: session.userId },
-    include: {
-      createdBy: { select: { name: true } },
-      assignedTo: { select: { name: true } },
-      _count: { select: { comments: true, attachments: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  // Whose tickets this user may see in this queue; the URL's filters narrow it further
+  const scope = isAdmin
+    ? {}
+    : isITSupport
+      ? (isAssignedToMeQueue ? { assignedToId: session.userId } : {})
+      : { createdById: session.userId }
 
-  // Global counts for IT Support queue tabs
-  let totalTicketCount = 0
-  let assignedToMeCount = 0
-  if (isITSupport || isAdmin) {
-    [totalTicketCount, assignedToMeCount] = await Promise.all([
-      prisma.ticket.count(),
-      prisma.ticket.count({ where: { assignedToId: session.userId } }),
-    ])
-  }
-
-  let agents: { id: string; name: string }[] = []
-  if (isITSupport || isAdmin) {
-    agents = await prisma.user.findMany({
-      where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    })
-  }
-
-  const serialized = tickets.map((t) => ({
-    ...t,
-    priority: t.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
-    status: t.status as 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED',
-    createdAt: t.createdAt.toISOString(),
-    updatedAt: t.updatedAt.toISOString(),
-    slaDeadline: t.slaDeadline ? t.slaDeadline.toISOString() : undefined,
-  }))
+  const isStaff = isITSupport || isAdmin
+  const [list, counts, agents, myCriticalCount, settings] = await Promise.all([
+    loadTicketPage(scope, parseTicketFilters(searchParams)),
+    // Global counts for IT Support queue tabs
+    isStaff
+      ? Promise.all([prisma.ticket.count(), prisma.ticket.count({ where: { assignedToId: session.userId } })])
+      : Promise.resolve([0, 0]),
+    isStaff
+      ? prisma.user.findMany({
+          where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    // An agent is told once about unfinished critical tickets assigned to them
+    isITSupport
+      ? prisma.ticket.count({ where: { assignedToId: session.userId, priority: 'CRITICAL', status: { notIn: ['RESOLVED', 'CLOSED'] } } })
+      : Promise.resolve(0),
+    getAppSettings(),
+  ])
+  const [totalTicketCount, assignedToMeCount] = counts
 
   return (
     <TicketListClient
-      tickets={serialized}
+      tickets={list.tickets}
+      matching={list.matching}
+      page={list.page}
+      pageCount={list.pageCount}
+      stats={list.stats}
+      myCriticalCount={myCriticalCount}
       role={session.role as 'EMPLOYEE' | 'IT_SUPPORT' | 'ADMIN'}
       currentUserId={session.userId}
       totalTicketCount={totalTicketCount}
       assignedToMeCount={assignedToMeCount}
       activeQueue={isAssignedToMeQueue ? 'assigned_to_me' : (searchParams?.queue === 'all' ? 'all' : undefined)}
       agents={agents}
-      cannedResponses={parseCannedResponses((await getAppSettings())?.cannedResponses)}
+      cannedResponses={parseCannedResponses(settings?.cannedResponses)}
     />
   )
 }

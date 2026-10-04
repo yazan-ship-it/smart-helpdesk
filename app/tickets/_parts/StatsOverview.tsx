@@ -6,7 +6,8 @@ import { Activity, AlertTriangle, BarChart2, CheckCircle2, Inbox, Ticket } from 
 import type { Status } from '@/lib/ticket-status'
 import { useIsClient } from '@/lib/useIsClient'
 import { useTranslation } from '@/lib/i18n'
-import type { Role, TicketData } from './types'
+import type { TicketListStats } from '@/lib/ticket-query'
+import type { Role } from './types'
 
 const STATUS_CHART_COLORS: Record<Status, string> = {
   OPEN: '#f59e0b',
@@ -16,24 +17,14 @@ const STATUS_CHART_COLORS: Record<Status, string> = {
   CLOSED: '#64748b',
 }
 
-export function ticketStats(tickets: TicketData[]) {
-  const count = (status: Status) => tickets.filter((t) => t.status === status).length
-  return {
-    total: tickets.length,
-    open: count('OPEN'),
-    assigned: count('ASSIGNED'),
-    inProgress: count('IN_PROGRESS'),
-    resolved: count('RESOLVED'),
-    closed: count('CLOSED'),
-    critical: tickets.filter((t) => t.priority === 'CRITICAL').length,
-  }
-}
-
-/** The six counters and the tickets-by-status chart */
-export default function StatsOverview({ tickets, role }: { tickets: TicketData[]; role: Role }) {
+/** The six counters and the tickets-by-status chart, for every ticket in the queue (not only this page) */
+export default function StatsOverview({ stats: s, role }: { stats: TicketListStats; role: Role }) {
   const { t } = useTranslation()
   const mounted = useIsClient()
-  const stats = useMemo(() => ticketStats(tickets), [tickets])
+  const stats = useMemo(
+    () => ({ total: s.total, open: s.byStatus.OPEN, assigned: s.byStatus.ASSIGNED, inProgress: s.byStatus.IN_PROGRESS, resolved: s.byStatus.RESOLVED, closed: s.byStatus.CLOSED, critical: s.critical }),
+    [s],
+  )
   const mine = role === 'EMPLOYEE'
 
   const chartData = useMemo(
@@ -67,7 +58,7 @@ export default function StatsOverview({ tickets, role }: { tickets: TicketData[]
               {t('ticketList.ticketsByStatus')}
             </h2>
             <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
-              {tickets.length} {t('ticketList.total')}
+              {stats.total} {t('ticketList.total')}
             </span>
           </div>
           <div style={{ height: 140 }}>

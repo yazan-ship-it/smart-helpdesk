@@ -4,53 +4,43 @@ import { prisma } from '@/lib/db'
 import { getAppSettings, parseCannedResponses } from '@/lib/settings'
 import TicketListClient from '@/app/tickets/TicketListClient'
 import { slaBreachedWhere } from '@/lib/sla'
+import { loadTicketPage, parseTicketFilters } from '@/lib/ticket-query'
 
 export const metadata = { title: 'All Tickets | Admin' }
 
-export default async function AdminTicketsPage(props: { searchParams: Promise<{ filter?: string }> }) {
-  const { filter } = await props.searchParams
-  const slaBreachedOnly = filter === 'sla_breached'
+export default async function AdminTicketsPage(props: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const searchParams = await props.searchParams
+  const slaBreachedOnly = searchParams.filter === 'sla_breached'
   const session = await getSession()
-  
+
   if (!session || session.role !== 'ADMIN') {
     redirect('/login')
   }
 
-  const tickets = await prisma.ticket.findMany({
-    where: slaBreachedOnly ? slaBreachedWhere() : undefined,
-    include: {
-      createdBy: { select: { name: true } },
-      assignedTo: { select: { name: true } },
-      _count: { select: { comments: true, attachments: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
-
-  const agents: { id: string; name: string }[] = await prisma.user.findMany({
-    where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  })
-
-  const serialized = tickets.map((t) => ({
-    ...t,
-    priority: t.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
-    status: t.status as 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED',
-    createdAt: t.createdAt.toISOString(),
-    updatedAt: t.updatedAt.toISOString(),
-    slaDeadline: t.slaDeadline ? t.slaDeadline.toISOString() : undefined,
-  }))
+  const [list, agents, settings] = await Promise.all([
+    loadTicketPage(slaBreachedOnly ? slaBreachedWhere() : {}, parseTicketFilters(searchParams)),
+    prisma.user.findMany({
+      where: { role: 'IT_SUPPORT', accountStatus: 'APPROVED' },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    getAppSettings(),
+  ])
 
   return (
     <TicketListClient
-      tickets={serialized}
+      tickets={list.tickets}
+      matching={list.matching}
+      page={list.page}
+      pageCount={list.pageCount}
+      stats={list.stats}
       role="ADMIN"
       currentUserId={session.userId}
-      totalTicketCount={tickets.length}
+      totalTicketCount={list.stats.total}
       assignedToMeCount={0}
       activeQueue={undefined}
       agents={agents}
-      cannedResponses={parseCannedResponses((await getAppSettings())?.cannedResponses)}
+      cannedResponses={parseCannedResponses(settings?.cannedResponses)}
       isAdminView={true}
       slaBreachedOnly={slaBreachedOnly}
     />

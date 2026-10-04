@@ -6,7 +6,8 @@ import { Filter, Search, X, XCircle } from 'lucide-react'
 import { TICKET_CATEGORIES } from '@/lib/constants'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
 import type { DateRange, TicketFilterState } from './useTicketFilters'
-import { ACTIVE_PILL, type TicketData } from './types'
+import type { TicketListStats } from '@/lib/ticket-query'
+import { ACTIVE_PILL } from './types'
 
 const STATUS_VALUES = ['', 'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']
 const PRIORITY_VALUES = ['', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -20,12 +21,13 @@ const DATE_RANGES: { value: DateRange; label: string }[] = [
 /** Search box, status pills, and the expandable priority/category/agent/date filters */
 export default function TicketFilters({
   filters: f,
-  tickets,
+  stats,
   agents,
   showAgentFilter,
 }: {
   filters: TicketFilterState
-  tickets: TicketData[]
+  /** Counts for the whole queue, shown on the status pills */
+  stats: TicketListStats
   agents?: { id: string; name: string }[]
   showAgentFilter?: boolean
 }) {
@@ -113,7 +115,7 @@ export default function TicketFilters({
       {/* Status pills (always visible) */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
         {STATUS_VALUES.map((value) => {
-          const count = value ? tickets.filter((ticket) => ticket.status === value).length : tickets.length
+          const count = value ? stats.byStatus[value as keyof TicketListStats['byStatus']] : stats.total
           const isActive = f.statusFilter === value
           const highlighted = value === '' ? f.statusFilter === '' : f.statusFilter.split(',').includes(value)
           return (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
@@ -11,16 +11,27 @@ import TicketDrawer from '@/app/components/TicketDrawer'
 import type { CannedResponse } from '@/lib/settings'
 import { useTranslation } from '@/lib/i18n'
 import { ListHeader, QueueTabs } from './_parts/ListHeader'
-import StatsOverview, { ticketStats } from './_parts/StatsOverview'
+import StatsOverview from './_parts/StatsOverview'
 import TicketFilters from './_parts/TicketFilters'
 import { EmployeeTicketCard, StaffTicketRow } from './_parts/TicketItems'
 import { useTicketFilters } from './_parts/useTicketFilters'
+import Pagination from './_parts/Pagination'
+import type { TicketListStats } from '@/lib/ticket-query'
 import type { Role, TicketData } from './_parts/types'
 
 export type { TicketData }
 
 type Props = {
+  /** One page of tickets, already filtered and sorted by the server */
   tickets: TicketData[]
+  /** How many tickets match the filters, on all pages */
+  matching: number
+  page: number
+  pageCount: number
+  /** Counts for the whole queue (counters, chart, status pills) */
+  stats: TicketListStats
+  /** Unfinished critical tickets assigned to this agent */
+  myCriticalCount?: number
   role: Role
   currentUserId?: string
   totalTicketCount?: number
@@ -45,14 +56,13 @@ const itemVariants: Variants = {
 }
 
 /** Ticket list for every role: employees see cards, staff a queue that opens a drawer */
-function TicketListClientContent({ tickets, role, currentUserId, totalTicketCount, assignedToMeCount, activeQueue, agents, cannedResponses = [], isAdminView, slaBreachedOnly }: Props) {
+function TicketListClientContent({ tickets, matching, page, pageCount, stats, myCriticalCount = 0, role, currentUserId, totalTicketCount, assignedToMeCount, activeQueue, agents, cannedResponses = [], isAdminView, slaBreachedOnly }: Props) {
   const { t } = useTranslation()
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const filters = useTicketFilters(tickets, currentUserId, activeQueue)
+  const filters = useTicketFilters()
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
-  const criticalCount = useMemo(() => ticketStats(tickets).critical, [tickets])
 
   // Keep the queue current: re-fetch the server data every 30s while the tab is visible
   useEffect(() => {
@@ -72,22 +82,17 @@ function TicketListClientContent({ tickets, role, currentUserId, totalTicketCoun
 
   // Tell an IT agent once about critical tickets assigned to them
   useEffect(() => {
-    if (role !== 'IT_SUPPORT' || !currentUserId) return
-    const myCritical = tickets.filter(
-      (ticket) => ticket.priority === 'CRITICAL' && ticket.assignedToId === currentUserId && ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED',
-    )
-    if (myCritical.length > 0) {
-      toast.error(t('toasts.criticalAssigned', { count: myCritical.length }), { duration: 6000, id: 'critical-alert' })
-    }
+    if (role !== 'IT_SUPPORT' || myCriticalCount === 0) return
+    toast.error(t('toasts.criticalAssigned', { count: myCriticalCount }), { duration: 6000, id: 'critical-alert' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // once, on mount
 
   // "Showing {shown} of {total} tickets", with the shown count highlighted
-  const [showingBefore, showingAfter] = t('ticketList.showingOf', { total: tickets.length }).split('{shown}')
+  const [showingBefore, showingAfter] = t('ticketList.showingOf', { total: stats.total }).split('{shown}')
 
   return (
     <div className="animate-fade-up">
-      <ListHeader role={role} isAdminView={isAdminView} criticalCount={criticalCount} />
+      <ListHeader role={role} isAdminView={isAdminView} criticalCount={stats.critical} />
 
       <div className="page-content space-y-6">
         {slaBreachedOnly && (
@@ -105,24 +110,24 @@ function TicketListClientContent({ tickets, role, currentUserId, totalTicketCoun
         {role === 'IT_SUPPORT' && (
           <QueueTabs
             activeQueue={activeQueue}
-            assignedCount={assignedToMeCount ?? tickets.filter((ticket) => ticket.assignedToId === currentUserId).length}
-            totalCount={totalTicketCount ?? tickets.length}
+            assignedCount={assignedToMeCount ?? 0}
+            totalCount={totalTicketCount ?? stats.total}
           />
         )}
 
-        <StatsOverview tickets={tickets} role={role} />
+        <StatsOverview stats={stats} role={role} />
 
-        <TicketFilters filters={filters} tickets={tickets} agents={agents} showAgentFilter={isAdminView} />
+        <TicketFilters filters={filters} stats={stats} agents={agents} showAgentFilter={isAdminView} />
 
         <div className="flex items-center justify-between">
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
             {showingBefore}
-            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{filters.filtered.length}</span>
+            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{matching}</span>
             {showingAfter}
           </p>
         </div>
 
-        {filters.filtered.length === 0 ? (
+        {tickets.length === 0 ? (
           role === 'EMPLOYEE' && !filters.hasUserFilters ? (
             <div className="flex flex-col items-center justify-center p-12 text-center rounded-2xl border border-border bg-card shadow-sm animate-fade-in mt-4">
               <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center mb-5">
@@ -153,10 +158,11 @@ function TicketListClientContent({ tickets, role, currentUserId, totalTicketCoun
             variants={containerVariants}
             initial="hidden"
             animate="show"
-            className={role === 'EMPLOYEE' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'}
+            className={`${role === 'EMPLOYEE' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2'} transition-opacity ${filters.isPending ? 'opacity-60' : ''}`}
+            aria-busy={filters.isPending}
           >
             <AnimatePresence mode="popLayout">
-              {filters.filtered.map((ticket) => (
+              {tickets.map((ticket) => (
                 <motion.div
                   key={ticket.id}
                   variants={itemVariants}
@@ -175,6 +181,8 @@ function TicketListClientContent({ tickets, role, currentUserId, totalTicketCoun
             </AnimatePresence>
           </motion.div>
         )}
+
+        <Pagination page={page} pageCount={pageCount} onPage={filters.goToPage} disabled={filters.isPending} />
       </div>
       <TicketDrawer
         ticketId={selectedTicketId}

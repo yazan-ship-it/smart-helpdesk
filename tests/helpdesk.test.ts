@@ -1501,3 +1501,96 @@ describe('Test 18: Lifecycle Consistency & Database Constraints', () => {
     await prisma.ticket.update({ where: { id: ticketId }, data: { priority: 'HIGH' } })
   })
 })
+
+describe('Test 19: Ticket List Paging', () => {
+  type PageProps = {
+    tickets: { id: string; priority: string; status: string; createdAt: string; title: string }[]
+    matching: number
+    page: number
+    pageCount: number
+    stats: { total: number; critical: number; byStatus: Record<string, number> }
+  }
+  const PRIORITY_COUNTS = { CRITICAL: 5, HIGH: 10, MEDIUM: 20, LOW: 10 } as const
+  let pagerId: string
+
+  const open = async (params: Record<string, string> = {}) =>
+    (await TicketsPage({ searchParams: Promise.resolve(params) })) as ReactElement<PageProps>
+
+  beforeAll(async () => {
+    pagerId = await createUser('Paging Employee', `test-pager-${stamp}@test.com`, 'EMPLOYEE')
+    const last = await prisma.ticket.findFirst({ orderBy: { ticketNumber: 'desc' }, select: { ticketNumber: true } })
+    let n = last?.ticketNumber ?? 0
+    const base = Date.now() - 1000 * 60 * 60
+    const data = Object.entries(PRIORITY_COUNTS).flatMap(([priority, count]) =>
+      Array.from({ length: count }, (_, i) => ({
+        ticketNumber: ++n,
+        title: `Paged ${priority} ${i}${i === 0 ? ' needle' : ''}`,
+        description: 'Paging test ticket',
+        category: 'Network',
+        priority,
+        status: i % 2 === 0 ? 'OPEN' : 'IN_PROGRESS',
+        createdById: pagerId,
+        createdAt: new Date(base + n * 1000),
+      })),
+    )
+    await prisma.ticket.createMany({ data })
+  })
+
+  it('shows 20 tickets a page, most urgent first and newest first within a priority', async () => {
+    signInAs(pagerId, 'EMPLOYEE')
+    const pages = [await open(), await open({ page: '2' }), await open({ page: '3' })]
+
+    expect(pages.map((p) => p.props.tickets.length)).toEqual([20, 20, 5])
+    expect(pages.every((p) => p.props.pageCount === 3 && p.props.matching === 45)).toBe(true)
+
+    const all = pages.flatMap((p) => p.props.tickets)
+    expect(new Set(all.map((t) => t.id)).size).toBe(45)
+    const rank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as Record<string, number>
+    for (let i = 1; i < all.length; i++) {
+      const [a, b] = [all[i - 1], all[i]]
+      expect(rank[a.priority] < rank[b.priority] || (a.priority === b.priority && a.createdAt >= b.createdAt)).toBe(true)
+    }
+  })
+
+  it('the counters describe every ticket in the queue, not only the page', async () => {
+    signInAs(pagerId, 'EMPLOYEE')
+    const { stats } = (await open({ status: 'OPEN' })).props
+    expect(stats.total).toBe(45)
+    expect(stats.critical).toBe(5)
+    expect(stats.byStatus.OPEN + stats.byStatus.IN_PROGRESS).toBe(45)
+  })
+
+  it('filters on the server: priority, status, search, ticket number', async () => {
+    signInAs(pagerId, 'EMPLOYEE')
+    const high = (await open({ priority: 'HIGH' })).props
+    expect(high.matching).toBe(10)
+    expect(high.tickets.every((t) => t.priority === 'HIGH')).toBe(true)
+
+    const openOnly = (await open({ status: 'OPEN' })).props
+    expect(openOnly.tickets.every((t) => t.status === 'OPEN')).toBe(true)
+
+    const needle = (await open({ q: 'NEEDLE' })).props
+    expect(needle.matching).toBe(4)
+
+    const first = high.tickets[0]
+    const number = (await prisma.ticket.findUnique({ where: { id: first.id } }))!.ticketNumber
+    expect((await open({ q: `#${number}` })).props.tickets.map((t) => t.id)).toEqual([first.id])
+  })
+
+  it('a page past the end shows the last page, and junk values are ignored', async () => {
+    signInAs(pagerId, 'EMPLOYEE')
+    const late = (await open({ page: '99' })).props
+    expect(late.page).toBe(3)
+    expect(late.tickets).toHaveLength(5)
+
+    const junk = (await open({ page: '-2', priority: 'URGENT', status: 'NOPE' })).props
+    expect(junk.page).toBe(1)
+    expect(junk.matching).toBe(45)
+  })
+
+  it("filters never widen the scope: an employee's search doesn't reach other people's tickets", async () => {
+    signInAs(employeeId, 'EMPLOYEE')
+    const found = (await open({ q: 'Paged' })).props
+    expect(found.matching).toBe(0)
+  })
+})

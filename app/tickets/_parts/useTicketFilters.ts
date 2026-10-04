@@ -1,132 +1,87 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import type { Priority } from '@/lib/ticket-display'
-import type { TicketData } from './types'
 
 export type DateRange = 'all' | 'today' | 'week' | 'month'
 
-const PRIORITY_ORDER: Record<Priority, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }
-const DAY = 24 * 60 * 60 * 1000
-
-/** Older tickets may use previous category names ("Email", "Access Issue") */
-function matchesCategory(ticketCategory: string, filterCategory: string): boolean {
-  if (!filterCategory || filterCategory === 'ALL') return true
-  if (!ticketCategory) return false
-
-  const tCat = ticketCategory.toLowerCase().trim()
-  const fCat = filterCategory.toLowerCase().trim()
-
-  if (tCat === fCat) return true
-  if (fCat === 'email' && tCat.includes('email')) return true
-  if (fCat.includes('access') && tCat.includes('access')) return true
-
-  return tCat.includes(fCat) || fCat.includes(tCat)
-}
+/** Filters a page is opened with that aren't the user's own choice */
+const KEPT_ON_CLEAR = ['queue', 'filter']
+const SEARCH_DELAY_MS = 300
 
 /**
- * The list's search and filters. They start from the URL (sidebar links such
- * as ?status=OPEN or ?queue=assigned_to_me) and follow it when it changes.
+ * The list's search and filters live in the URL (?status=OPEN&q=printer&page=2),
+ * so the server filters and pages the tickets, and a filtered view can be shared
+ * or reloaded. Sidebar links such as ?status=OPEN work the same way.
  */
-export function useTicketFilters(tickets: TicketData[], currentUserId: string | undefined, activeQueue: 'assigned_to_me' | 'all' | undefined) {
+export function useTicketFilters() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const pathname = usePathname()
+  const pathname = usePathname() || '/tickets'
+  const [isPending, startTransition] = useTransition()
 
-  const isQueueAssigned = activeQueue === 'assigned_to_me' || searchParams?.get('queue') === 'assigned_to_me'
+  const get = (key: string) => searchParams?.get(key) ?? ''
 
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState(searchParams?.get('status') || '')
-  const [priorityFilter, setPriorityFilter] = useState(searchParams?.get('priority') || '')
-  const [categoryFilter, setCategoryFilter] = useState(searchParams?.get('category') || '')
-  const [agentFilter, setAgentFilter] = useState(searchParams?.get('agent') || '')
-  const [dateRangeFilter, setDateRangeFilter] = useState<DateRange>('all')
-  const [assignedToMeFilter, setAssignedToMeFilter] = useState(isQueueAssigned || searchParams?.get('assignedToMe') === 'true')
-
-  // Re-sync filters when the URL changes (adjusting state during render instead of in an effect)
-  const [prevSearchParams, setPrevSearchParams] = useState(searchParams)
-  if (searchParams !== prevSearchParams) {
-    setPrevSearchParams(searchParams)
-    setStatusFilter(searchParams?.get('status') || '')
-    setPriorityFilter(searchParams?.get('priority') || '')
-    setCategoryFilter(searchParams?.get('category') || '')
-    setAgentFilter(searchParams?.get('agent') || '')
-    setAssignedToMeFilter(searchParams?.get('queue') === 'assigned_to_me' || searchParams?.get('assignedToMe') === 'true')
+  /** Change some parameters; any filter change goes back to page 1 */
+  const update = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams?.toString())
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) next.set(key, value)
+      else next.delete(key)
+    }
+    if (!('page' in changes)) next.delete('page')
+    const query = next.toString()
+    startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }))
   }
+
+  // The search box updates as the user types; the URL follows once they pause
+  const urlSearch = get('q')
+  const [search, setSearch] = useState(urlSearch)
+  const [prevUrlSearch, setPrevUrlSearch] = useState(urlSearch)
+  if (urlSearch !== prevUrlSearch) {
+    // The URL changed elsewhere (clear, back button): follow it
+    setPrevUrlSearch(urlSearch)
+    setSearch(urlSearch)
+  }
+  useEffect(() => {
+    if (search.trim() === urlSearch) return
+    const id = setTimeout(() => update({ q: search.trim() || null }), SEARCH_DELAY_MS)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, urlSearch])
+
+  const statusFilter = get('status')
+  const priorityFilter = get('priority')
+  const categoryFilter = get('category')
+  const agentFilter = get('agent')
+  const range = get('range')
+  const dateRangeFilter: DateRange = range === 'today' || range === 'week' || range === 'month' ? range : 'all'
 
   const clearAll = () => {
     setSearch('')
-    setStatusFilter('')
-    setPriorityFilter('')
-    setCategoryFilter('')
-    setAgentFilter('')
-    setDateRangeFilter('all')
-    setAssignedToMeFilter(false)
-    // Clear the URL's filters too, but stay in the same queue ("all tickets" or "assigned to me")
-    const queue = searchParams?.get('queue')
-    if (pathname) router.replace(queue ? `${pathname}?queue=${encodeURIComponent(queue)}` : pathname)
+    // Stay in the same queue ("all tickets", "assigned to me", "SLA breaches")
+    const kept = new URLSearchParams()
+    for (const key of KEPT_ON_CLEAR) if (get(key)) kept.set(key, get(key))
+    const query = kept.toString()
+    startTransition(() => router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false }))
   }
 
-  const activeCount = [
-    search.trim(),
-    statusFilter,
-    priorityFilter,
-    categoryFilter,
-    agentFilter,
-    dateRangeFilter !== 'all',
-    assignedToMeFilter,
-  ].filter(Boolean).length
-
-  const filtered = useMemo(() => {
-    let list = tickets
-    if (statusFilter) {
-      const statuses = statusFilter.split(',').map((s) => s.toLowerCase())
-      list = list.filter((t) => statuses.includes(t.status.toLowerCase()))
-    }
-    if (priorityFilter) list = list.filter((t) => t.priority.toLowerCase() === priorityFilter.toLowerCase())
-    if (categoryFilter) list = list.filter((t) => matchesCategory(t.category, categoryFilter))
-    if (agentFilter) {
-      list = agentFilter === 'unassigned' ? list.filter((t) => !t.assignedToId) : list.filter((t) => t.assignedToId === agentFilter)
-    }
-    if (dateRangeFilter !== 'all') {
-      const now = new Date()
-      if (dateRangeFilter === 'today') list = list.filter((t) => new Date(t.createdAt).toDateString() === now.toDateString())
-      else {
-        const since = new Date(now.getTime() - (dateRangeFilter === 'week' ? 7 : 30) * DAY)
-        list = list.filter((t) => new Date(t.createdAt) >= since)
-      }
-    }
-    if (assignedToMeFilter && currentUserId) list = list.filter((t) => t.assignedToId === currentUserId)
-
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(
-        (t) =>
-          t.title.toLowerCase().includes(q) ||
-          t.description.toLowerCase().includes(q) ||
-          t.category.toLowerCase().includes(q) ||
-          t.id.toLowerCase().includes(q) ||
-          String(t.ticketNumber).includes(q) ||
-          t.createdBy.name.toLowerCase().includes(q) ||
-          (t.assignedTo && t.assignedTo.name.toLowerCase().includes(q)),
-      )
-    }
-    return [...list].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
-  }, [tickets, search, statusFilter, priorityFilter, categoryFilter, agentFilter, dateRangeFilter, assignedToMeFilter, currentUserId])
+  const hasUserFilters = Boolean(urlSearch || statusFilter || priorityFilter || categoryFilter || agentFilter || range)
 
   return {
     search, setSearch,
-    statusFilter, setStatusFilter,
-    priorityFilter, setPriorityFilter,
-    categoryFilter, setCategoryFilter,
-    agentFilter, setAgentFilter,
-    dateRangeFilter, setDateRangeFilter,
-    activeCount,
-    /** Filters the employee chose (the sidebar's queue isn't one) */
-    hasUserFilters: Boolean(search || statusFilter || priorityFilter || categoryFilter),
+    statusFilter, setStatusFilter: (value: string) => update({ status: value || null }),
+    priorityFilter, setPriorityFilter: (value: string) => update({ priority: value || null }),
+    categoryFilter, setCategoryFilter: (value: string) => update({ category: value || null }),
+    agentFilter, setAgentFilter: (value: string) => update({ agent: value || null }),
+    dateRangeFilter, setDateRangeFilter: (value: DateRange) => update({ range: value === 'all' ? null : value }),
+    goToPage: (page: number) => update({ page: page > 1 ? String(page) : null }),
+    activeCount: [urlSearch, statusFilter, priorityFilter, categoryFilter, agentFilter, range].filter(Boolean).length,
+    /** Filters the user chose (the sidebar's queue isn't one) */
+    hasUserFilters,
+    /** True while the server is fetching the filtered page */
+    isPending,
     clearAll,
-    filtered,
   }
 }
 

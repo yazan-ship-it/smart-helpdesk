@@ -1,20 +1,21 @@
 'use client'
 
 import { useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from '@/lib/i18n'
 
 export default function SettingsError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string }
-  reset: () => void
+  retry: () => void
 }) {
   const { t } = useTranslation()
 
   useEffect(() => {
-    console.error(error)
+    Sentry.captureException(error)
   }, [error])
 
   return (
@@ -29,7 +30,7 @@ export default function SettingsError({
         {t('settingsError.failedToLoadSettingsData')}
       </p>
       <button
-        onClick={() => reset()}
+        onClick={() => retry()}
         className="btn btn-primary"
       >
         {t('settingsError.tryAgain')}

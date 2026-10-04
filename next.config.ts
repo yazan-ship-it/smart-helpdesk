@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 /** Sent with every response */
 const securityHeaders = [
@@ -28,4 +29,10 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry uploads source maps (readable stack traces) only when SENTRY_AUTH_TOKEN,
+// SENTRY_ORG and SENTRY_PROJECT are set, i.e. on the production build.
+export default withSentryConfig(nextConfig, {
+  silent: !process.env.CI,
+  telemetry: false,
+  widenClientFileUpload: true,
+});

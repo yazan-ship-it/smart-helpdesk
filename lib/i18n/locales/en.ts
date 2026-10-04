@@ -661,6 +661,12 @@ export const en = {
     clickToGoAway: 'Click to go Away',
     clickToGoAvailable: 'Click to go Available',
   },
+  errorPage: {
+    title: 'Something went wrong',
+    description: 'An unexpected error stopped this page. It has been reported; please try again.',
+    retry: 'Try again',
+    reference: 'Reference: {digest}',
+  },
   notFound: {
     pageNotFound: 'Page Not Found',
     thePageYouReLooking: "The page you're looking for doesn't exist.",

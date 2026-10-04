@@ -334,6 +334,7 @@ These are the usual paths; on the Users page an admin can set any account to `PE
 - **Admins can't lock themselves out:** they cannot suspend or demote their own account.
 - **Headers:** no framing (clickjacking), `nosniff`, referrer and permissions policies, HSTS.
 - **Errors** are returned as codes (`lib/errors.ts`) and shown in the user's language.
+- **Error monitoring** (optional, Sentry): server and browser errors are reported with the route and stack trace only; cookies, headers, request bodies, query strings, local variables and AI prompts are never sent (`lib/monitoring.ts`). A crashed page shows a translated error screen with a reference number.
 
 ---
 
@@ -351,6 +352,8 @@ Copy `.env.example` to `.env`; every variable is explained there.
 | `BLOB_READ_WRITE_TOKEN` | on Vercel | Private Vercel Blob store for attachments (set by Vercel when the store is connected) |
 | `STORAGE_DIR` | no | Local folder for attachments when there is no Blob token (default `.data/uploads`) |
 | `DEMO_MODE` | no | `true` shows 1-click logins for the seeded accounts. Never with real users |
+| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | no | Error monitoring with Sentry (server / browser). Without them nothing is reported |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | no | Let the build upload source maps, so Sentry shows readable stack traces |
 | `TEST_DATABASE_URL` | for tests | Separate database for `npm test`, wiped on every run; its name must end in `_test` |
 
 > **Without a Gemini key** the app still works: triage suggestions come from labelled keyword rules (if enabled in Settings), and summaries/translation report that AI is not configured. Google's free tier allows only a few requests per minute per model, which is why a fallback model is used.
@@ -395,9 +398,10 @@ Open [http://localhost:3000](http://localhost:3000).
 1. **Database:** create a project on [Neon](https://neon.tech). Copy the *pooled* connection string (host contains `-pooler`) and the *direct* one, and change `sslmode=require` to `sslmode=verify-full` in both (checks the server's certificate).
 2. **Vercel project:** import the GitHub repository on [Vercel](https://vercel.com). Vercel runs `npm run vercel-build`, which applies pending migrations and builds. `vercel.json` runs the app in Frankfurt (`fra1`), next to the database; if your Neon project is in another region, change it to match, or every query crosses an ocean.
 3. **Environment variables** (Project → Settings → Environment Variables): `DATABASE_URL` (pooled), `DIRECT_URL` (direct), `SESSION_SECRET`, `GEMINI_API_KEY`, and `DEMO_MODE` if this is a demo.
-4. **Attachments:** Storage → create a **Blob** store with **private** access and connect it to the project (this sets `BLOB_READ_WRITE_TOKEN`).
-5. **Deploy**, then load the demo data once from your machine with the Neon *direct* URL: `DATABASE_URL=... npm run db:seed`.
-6. **Check:** `https://<your-app>/api/health` should answer `{"status":"ok"}`.
+4. **Monitoring (optional):** create a free Sentry project (platform: Next.js) and add `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` (both the project's DSN); for readable stack traces also `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT`.
+5. **Attachments:** Storage → create a **Blob** store with **private** access and connect it to the project (this sets `BLOB_READ_WRITE_TOKEN`).
+6. **Deploy**, then load the demo data once from your machine with the Neon *direct* URL: `DATABASE_URL=... npm run db:seed`.
+7. **Check:** `https://<your-app>/api/health` should answer `{"status":"ok"}`.
 
 ---
 
@@ -413,7 +417,7 @@ npm test
 npm run test:watch
 ```
 
-### Test Coverage Breakdown (155/155 Passing)
+### Test Coverage Breakdown (160/160 Passing)
 
 ```
 ✓ tests/ai-triage.test.ts (10 tests)
@@ -437,7 +441,7 @@ npm run test:watch
     ✓ fails when every model is rate-limited, so callers can fall back honestly
     ✓ disables thinking on 2.5 models for speed
     ✓ rejects a triage answer with a category the admin does not have
-✓ tests/helpdesk.test.ts (121 tests)
+✓ tests/helpdesk.test.ts (126 tests)
   ✓ Test 1: User Login (7)
     ✓ valid credentials create a session for the user and redirect to their tickets
     ✓ IT_SUPPORT is redirected to their assigned queue
@@ -577,6 +581,12 @@ npm run test:watch
     ✓ reopening twice at once reopens the ticket once
     ✓ a ticket rated twice at once keeps one rating
     ✓ the database refuses statuses, priorities, roles and ratings outside the allowed values
+  ✓ Test 19: Ticket List Paging (5)
+    ✓ shows 20 tickets a page, most urgent first and newest first within a priority
+    ✓ the counters describe every ticket in the queue, not only the page
+    ✓ filters on the server: priority, status, search, ticket number
+    ✓ a page past the end shows the last page, and junk values are ignored
+    ✓ filters never widen the scope: an employee's search doesn't reach other people's tickets
 ✓ tests/history.test.ts (14 tests)
   ✓ ticket audit trail (14)
     ✓ stores the event, its data and an English sentence
@@ -643,6 +653,9 @@ smart-helpdesk/
 │   ├── errors.ts              # Error codes shown in the user's language
 │   ├── demo.ts                # 1-click demo logins (DEMO_MODE)
 │   ├── storage.ts             # Private file storage (Vercel Blob or local disk)
+│   ├── ticket-query.ts        # List filters and server-side paging (20 per page)
+│   ├── ticket-status.ts       # The ticket state machine
+│   ├── monitoring.ts          # What Sentry may collect (nothing private)
 │   ├── settings.ts / skills.ts / sla.ts / uploads.ts / ticket-rules.ts
 │   └── i18n/                  # Arabic/English dictionaries and provider
 ├── prisma/
@@ -650,11 +663,12 @@ smart-helpdesk/
 │   ├── migrations/            # Versioned SQL migrations (PostgreSQL)
 │   └── seed.ts                # Demo data
 ├── proxy.ts                   # Route protection (roles, forced password change)
+├── instrumentation*.ts        # Sentry error monitoring (server / browser), off without a DSN
 ├── scripts/
 │   ├── run-ts.js              # Run TypeScript files with plain Node
 │   └── seed.js                # npm run db:seed
 ├── .github/workflows/ci.yml   # Lint, types, tests (PostgreSQL) and build on every push
-├── tests/                     # 155 Vitest tests (5 files)
+├── tests/                     # 160 Vitest tests (5 files)
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
@@ -675,7 +689,7 @@ smart-helpdesk/
 | **Bilingual Localization** | Native Arabic (RTL) & English (LTR) language support with persistent cookies/localStorage | ✅ Complete |
 | **Analytics Dashboard** | KPI cards, SLA countdown badges and status chart; the list refreshes every 30s | ✅ Complete |
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
-| **Automated Testing** | 155 unit & integration tests against the real code, all passing | ✅ Complete |
+| **Automated Testing** | 160 unit & integration tests against the real code, all passing | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
 
 ---

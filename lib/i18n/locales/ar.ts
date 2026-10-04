@@ -663,6 +663,12 @@ export const ar: TranslationDictionary = {
     clickToGoAway: 'انقر للتحويل إلى غير متواجد',
     clickToGoAvailable: 'انقر للتحويل إلى متاح',
   },
+  errorPage: {
+    title: 'حدث خطأ ما',
+    description: 'توقفت هذه الصفحة بسبب خطأ غير متوقع، وتم الإبلاغ عنه. حاول مرة أخرى.',
+    retry: 'حاول مرة أخرى',
+    reference: 'رقم المرجع: {digest}',
+  },
   notFound: {
     pageNotFound: 'الصفحة غير موجودة',
     thePageYouReLooking: 'الصفحة التي تبحث عنها غير متوفرة أو تم نقلها.',

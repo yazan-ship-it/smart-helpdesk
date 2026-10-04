@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { updateTicketStatus, assignTicket, reassignTicket, addComment, takeOverTicket, confirmTicketResolution, reopenTicket, submitCsatRating } from '@/app/actions/tickets'
 import type { AttachmentInfo } from '@/lib/uploads'
+import { NEXT_STATUSES, type Status } from '@/lib/ticket-status'
 import { formatRelativeTime, formatTicketNumber } from '@/lib/utils'
 import { SlaBadge } from '@/components/SlaBadge'
 import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } from '@/lib/i18n'
@@ -37,7 +38,6 @@ import { describeHistory } from '@/lib/history'
 import { getRoleLabel } from '@/lib/roles'
 import { parseSkills } from '@/lib/skills'
 
-type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
 type Role = 'EMPLOYEE' | 'IT_SUPPORT' | 'ADMIN'
 
@@ -103,14 +103,6 @@ function statusBadgeClass(s: Status) {
  }
 }
 
-// Valid next statuses for status machine display
-const NEXT_STATUSES: Record<Status, Status[]> = {
- OPEN: ['ASSIGNED'],
- ASSIGNED: ['IN_PROGRESS'],
- IN_PROGRESS: ['RESOLVED'],
- RESOLVED: ['CLOSED'],
- CLOSED: [],
-}
 
 function priorityBadgeClass(p: Priority) {
  switch (p) {

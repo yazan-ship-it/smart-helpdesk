@@ -11,11 +11,12 @@ import { historyData } from '@/lib/history'
 import { PRIORITIES, type Priority } from '@/lib/ai/triage'
 import { parseCategories } from '@/lib/settings'
 import { MAX_FILES } from '@/lib/uploads'
+import { isValidTransition, type Status } from '@/lib/ticket-status'
 import { fail, type ActionResult, type ErrorCode } from '@/lib/errors'
 import { COMMENT_MAX, CSAT_FEEDBACK_MAX, DESCRIPTION_MAX, DESCRIPTION_MIN, TITLE_MAX, TITLE_MIN } from '@/lib/ticket-rules'
 
 export type { Priority }
-export type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+export type { Status }
 
 
 export type TicketState = {
@@ -23,19 +24,6 @@ export type TicketState = {
   /** The form shows newTicket.errors.<field> for each flagged field */
   fieldErrors?: Partial<Record<'title' | 'description' | 'category', true>>
 } | undefined
-
-// Valid lifecycle transitions - enforces strict state machine
-const VALID_TRANSITIONS: Record<Status, Status[]> = {
-  OPEN: ['ASSIGNED'],
-  ASSIGNED: ['IN_PROGRESS'],
-  IN_PROGRESS: ['RESOLVED'],
-  RESOLVED: ['CLOSED'],
-  CLOSED: [],
-}
-
-function isValidTransition(from: Status, to: Status): boolean {
-  return VALID_TRANSITIONS[from]?.includes(to) ?? false
-}
 
 const isFinished = (status: string) => status === 'RESOLVED' || status === 'CLOSED'
 

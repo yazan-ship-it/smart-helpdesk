@@ -14,18 +14,10 @@ import { useTranslation, getStatusLabel, getPriorityLabel, getCategoryLabel } fr
 import AiTranslateButton from '@/app/components/AiTranslateButton'
 import AiTicketSummary from '@/app/components/AiTicketSummary'
 import type { CannedResponse } from '@/lib/settings'
+import { NEXT_STATUSES, type Status } from '@/lib/ticket-status'
 
-type Status = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
 type TicketDetails = NonNullable<Awaited<ReturnType<typeof getTicketDetails>>>
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-
-const VALID_TRANSITIONS: Record<Status, Status[]> = {
-  OPEN: ['ASSIGNED'],
-  ASSIGNED: ['IN_PROGRESS'],
-  IN_PROGRESS: ['RESOLVED'],
-  RESOLVED: ['CLOSED'],
-  CLOSED: [],
-}
 
 function statusBadgeClass(s: Status) {
   switch (s) {
@@ -390,7 +382,7 @@ export default function TicketDrawer({
                     <div className="flex items-center gap-2 pt-2 border-t border-border">
                       {/* Contextual Status Transition */}
                       {(() => {
-                        const nextStatuses = VALID_TRANSITIONS[ticket.status as Status] || []
+                        const nextStatuses = NEXT_STATUSES[ticket.status as Status] || []
                         if (nextStatuses.length === 0) return (
                           <div className="flex-1 text-center py-2 text-sm font-medium text-muted-foreground">
                             {t('drawer.ticketIsClosed')}

@@ -10,6 +10,8 @@ An enterprise-grade IT Support Ticket Management System built with **Next.js 16 
 - [Executive Overview](#-executive-overview)
 - [System Architecture & Tech Stack](#-system-architecture--tech-stack)
 - [Entity-Relationship (ER) Diagram](#-entity-relationship-er-diagram)
+  - [Data hierarchy](#data-hierarchy)
+  - [Allowed values: CHECK constraints instead of enums](#allowed-values-check-constraints-instead-of-enums)
 - [Pre-Seeded Test Accounts](#-pre-seeded-test-accounts)
 - [Core Capabilities](#-core-capabilities)
   - [Role-Based Access Control (RBAC)](#1-role-based-access-control-rbac)
@@ -59,17 +61,17 @@ This platform solves these challenges through:
 
 ## 📊 Entity-Relationship (ER) Diagram
 
-The system uses a relational database schema designed for high auditability and operational integrity.
+The system uses a relational database schema (PostgreSQL) designed for auditability and operational integrity. It matches `prisma/schema.prisma` and the SQL in `prisma/migrations/`.
 
 ```mermaid
 erDiagram
     User ||--o{ Ticket : "creates (createdTickets)"
-    User ||--o{ Ticket : "assigned to (assignedTickets)"
+    User |o--o{ Ticket : "assigned to (assignedTickets)"
     User ||--o{ Comment : "authors"
     User ||--o{ TicketHistory : "triggers"
     Ticket ||--o{ Comment : "contains"
     Ticket ||--o{ TicketHistory : "audits"
-    Ticket ||--o{ Attachment : "has files"
+    Ticket |o--o{ Attachment : "has files"
     User ||--o{ Attachment : "uploads"
 
     User {
@@ -78,9 +80,10 @@ erDiagram
         String email UK "Corporate Email"
         String password "Bcrypt Hashed"
         String role "EMPLOYEE | IT_SUPPORT | ADMIN"
-        String accountStatus "APPROVED | PENDING | REJECTED"
+        String accountStatus "PENDING | APPROVED | REJECTED | SUSPENDED | INVITED"
         String skills "JSON Array: ['Hardware', 'Network']"
         Boolean isAvailable "Active Assignment Status"
+        Int sessionVersion "Bumped to sign out every device"
         DateTime lastLoginAt "Nullable"
         DateTime createdAt "Timestamp"
         DateTime updatedAt "Timestamp"
@@ -132,7 +135,7 @@ erDiagram
         String action "English sentence (logs, legacy rows)"
         String event "Event type, e.g. status_changed"
         String meta "JSON event data, e.g. from/to"
-        String overrideReason "Justification for Emergency Overrides"
+        String overrideReason "Reserved, not written by the app yet"
         String ticketId FK "Ticket.id"
         String userId FK "User.id"
         DateTime createdAt "Timestamp"
@@ -151,12 +154,63 @@ erDiagram
         String businessHoursStart "e.g. 09:00"
         String businessHoursEnd "e.g. 17:00"
         String workDays "JSON Array of Active Days"
+        Boolean pauseSlaOnWeekends "SLA clock counts business days only"
         Boolean enableAiTriage "AI Integration Flag"
+        Boolean fallbackHeuristicsEnabled "Labelled keyword rules when AI is down"
+        String autoApproveDomain "Employees with this email domain are approved on sign-up"
+        Boolean maintenanceMode "Only admins can sign in"
+        Boolean notifyNewUser "Reserved (no email yet)"
+        Boolean notifyCriticalTicket "Reserved (no email yet)"
         String categoriesList "JSON Array of Active Categories"
         String cannedResponses "JSON Array of Macros"
         DateTime updatedAt "Timestamp"
     }
+
+    RateLimit {
+        String key PK "e.g. login:account:alice@company.com"
+        Int count "Attempts in the current window"
+        DateTime windowStart "Start of the fixed window"
+    }
 ```
+
+`AppSettings` is a single row (`id = 'singleton'`) and `RateLimit` stands alone; neither has relations.
+
+### Data hierarchy
+
+Everything about a ticket hangs off the ticket. The app never deletes tickets, but the foreign keys cascade so a ticket removed from the database takes its comments, history and attachments with it:
+
+```mermaid
+flowchart TD
+    U[User] -->|creates| T[Ticket]
+    U -.->|is assigned| T
+    T -->|cascade| C[Comment<br/>public or internal note]
+    T -->|cascade| H[TicketHistory<br/>typed audit events]
+    T -->|cascade| A[Attachment<br/>file in private storage]
+    U -->|uploads| A
+```
+
+- An `Attachment` exists before its ticket (`ticketId` is null between upload and ticket creation), and is linked only if the requester uploaded it.
+- Users are never hard-deleted. They are suspended or rejected, so their tickets, comments and history keep their author.
+- **Indexes** follow the queries the screens run: a requester's tickets (`createdById`), an agent's queue (`assignedToId, status`), overdue tickets (`status, slaDeadline`), and a ticket's comments and history in time order.
+
+### Allowed values: CHECK constraints instead of enums
+
+Roles, statuses and priorities are `String` columns, validated in the application **and** by PostgreSQL `CHECK` constraints in the migrations:
+
+| Column | Allowed values |
+|---|---|
+| `User.role` | `EMPLOYEE`, `IT_SUPPORT`, `ADMIN` |
+| `User.accountStatus` | `PENDING`, `APPROVED`, `REJECTED`, `SUSPENDED`, `INVITED` |
+| `Ticket.status` | `OPEN`, `ASSIGNED`, `IN_PROGRESS`, `RESOLVED`, `CLOSED` |
+| `Ticket.priority`, `AppSettings.defaultPriority` | `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
+| `Ticket.csatRating` | `NULL` or 1–5 |
+| `Attachment.size` | 0 or more |
+
+**Why not Prisma enums?** A `CHECK` gives the same guarantee (the database refuses any other value), but:
+- adding a value later (e.g. an `ON_HOLD` status) is a one-line constraint change, and needs no regenerated types across the code;
+- it can be dropped with one statement (`ALTER TABLE ... DROP CONSTRAINT ...`), whereas converting a populated column to an enum type and back is a riskier migration.
+
+Prisma does not model `CHECK` constraints, so they live only in the SQL migrations (`20261002000000_init`, `20261004120000_check_default_priority`).
 
 ---
 
@@ -180,13 +234,66 @@ The platform includes 4 pre-configured corporate accounts representing all admin
 - **Server-Side Verification:** Every page, Server Action and API route checks the signed session cookie **and** the user's current record in the database, so the role used is always the current one (see [Security](#7-security)).
 - **Zero Client Trust:** UI controls for assignment, internal notes, and status transitions are completely omitted for unauthorized roles.
 
-### 2. Deterministic Ticket State Machine
-Tickets advance strictly through a verified linear progression:
+**Permission matrix** (enforced in the Server Actions and API routes; the UI only hides what the server would refuse):
 
-$$\mathbf{OPEN} \longrightarrow \mathbf{ASSIGNED} \longrightarrow \mathbf{IN\_PROGRESS} \longrightarrow \mathbf{RESOLVED} \longrightarrow \mathbf{CLOSED}$$
+| Action | Employee | IT Support | Admin |
+|---|:---:|:---:|:---:|
+| Create a ticket (with AI triage suggestions) | ✅ | ✅ | ✅ |
+| See tickets | Own only | All | All |
+| See and write internal notes | ❌ | ✅ | ✅ |
+| Reply on a ticket | Own only | ✅ | ✅ |
+| AI summary of a ticket | ❌ | ✅ | ✅ |
+| Translate a ticket or comment | ✅ | ✅ | ✅ |
+| Claim an unassigned ticket / take over a colleague's (logged) | ❌ | ✅ | ❌ |
+| Assign a ticket to an agent | ❌ | Unassigned or own tickets | Any unfinished ticket |
+| Move a ticket to its next status | ❌ | Own or unassigned tickets | ❌ (oversight only) |
+| Confirm a resolution, reopen, rate (CSAT) | Requester only | ❌ | ❌ |
+| Set own availability for auto-assignment | ❌ | ✅ | ❌ |
+| Approve, suspend, invite users; change roles and skills | ❌ | ❌ | ✅ |
+| Settings (SLA, categories, AI, maintenance mode) | ❌ | ❌ | ✅ |
+
+Admins deliberately don't move tickets through statuses: the agent doing the work does, and the admin reassigns when needed.
+
+### 2. Deterministic Ticket State Machine
+Tickets advance strictly through a verified linear progression (`lib/ticket-status.ts`):
+
+```mermaid
+stateDiagram-v2
+    [*] --> OPEN: created, no agent available
+    [*] --> ASSIGNED: created, auto-assigned by skill
+    OPEN --> ASSIGNED: agent claims, or agent/admin assigns
+    ASSIGNED --> IN_PROGRESS: assigned agent starts work
+    IN_PROGRESS --> RESOLVED: assigned agent resolves
+    RESOLVED --> CLOSED: requester confirms, or agent closes
+    RESOLVED --> IN_PROGRESS: requester reopens (with a reason)
+    CLOSED --> IN_PROGRESS: requester reopens (with a reason)
+    ASSIGNED --> OPEN: agent suspended or demoted
+    IN_PROGRESS --> OPEN: agent suspended or demoted
+    CLOSED --> [*]
+```
 
 - **Forward-Only Guard:** IT staff cannot move a ticket backwards (e.g., `RESOLVED` → `OPEN`) or skip states (e.g., `OPEN` → `RESOLVED`); the server rejects it.
-- **Requester Reopen:** The one deliberate exception: the employee who opened a ticket can reopen it after it is resolved or closed, with a written reason. The ticket goes back to `IN_PROGRESS` (or `OPEN` if unassigned) and the reopen is logged.
+- **Requester Reopen:** The one deliberate exception: the employee who opened a ticket can reopen it after it is resolved or closed, with a written reason. The ticket goes back to `IN_PROGRESS` (or `OPEN` if unassigned), gets a fresh SLA deadline, and the reopen is logged.
+- **Agents who leave:** when an admin suspends an agent or changes their role, the agent's unfinished tickets go back to `OPEN` and unassigned, and each move is logged.
+- **One owner at a time:** only the assigned agent changes a ticket's status or hands it to someone else. A colleague must first *take over* the ticket, which is recorded in the history.
+- **Simultaneous clicks:** every change (status, claim, take-over, assignment, confirmation, reopen, rating) only applies if the ticket is still in the state it was read in, so two people acting at once can't both succeed.
+
+**Account lifecycle** (`User.accountStatus`):
+
+```mermaid
+stateDiagram-v2
+    [*] --> APPROVED: employee signs up with the company domain
+    [*] --> PENDING: any other sign-up
+    [*] --> INVITED: admin invites (one-time password)
+    INVITED --> APPROVED: user sets their own password
+    PENDING --> APPROVED: admin approves
+    PENDING --> REJECTED: admin rejects
+    APPROVED --> SUSPENDED: admin suspends
+    SUSPENDED --> APPROVED: admin restores
+    REJECTED --> APPROVED: admin approves
+```
+
+These are the usual paths; on the Users page an admin can set any account to `PENDING`, `APPROVED`, `REJECTED` or `SUSPENDED` (except their own). Only `APPROVED` users can work in the app; an `INVITED` user can sign in only to change their password. A status change takes effect on the user's next request, because every session is checked against the database.
 - **SLA Tracking:** Each ticket gets a resolution deadline in business hours (per priority, from Settings). Resolution and close times are recorded, and a ticket resolved after its deadline is flagged as an SLA breach.
 - **Audit History:** Every state change, assignment and comment is recorded in `TicketHistory` as a typed event (`lib/history.ts`) with the actor and time, so the timeline is shown in the viewer's language.
 - **CSAT Feedback Loop:** When an employee closes a resolved ticket, an interactive 5-star Customer Satisfaction (CSAT) rating and feedback form is triggered.
@@ -222,7 +329,7 @@ $$\mathbf{OPEN} \longrightarrow \mathbf{ASSIGNED} \longrightarrow \mathbf{IN\_PR
   - Account requests: 5 per hour per address.
   - AI: 30 Gemini requests per user per 10 minutes. Over the limit, triage falls back to the keyword rules.
 - **Nothing from the browser is trusted:** categories must be the admin's, priorities and lengths are checked, a ticket can only use the requester's own uploads, tickets can only be assigned to active IT staff, and a ticket can be rated once.
-- **Concurrency:** ticket numbers can't collide (transaction + retry on the unique index), and a status change or take-over only applies if nobody changed the ticket first.
+- **Concurrency:** ticket numbers can't collide (transaction + retry on the unique index), and every ticket change (status, claim, take-over, assignment, confirmation, reopen, rating) only applies if nobody changed the ticket first.
 - **No account enumeration:** the login and account request forms answer the same way whether or not an email is registered.
 - **Admins can't lock themselves out:** they cannot suspend or demote their own account.
 - **Headers:** no framing (clickjacking), `nosniff`, referrer and permissions policies, HSTS.
@@ -306,7 +413,7 @@ npm test
 npm run test:watch
 ```
 
-### Test Coverage Breakdown (149/149 Passing)
+### Test Coverage Breakdown (155/155 Passing)
 
 ```
 ✓ tests/ai-triage.test.ts (10 tests)
@@ -330,7 +437,7 @@ npm run test:watch
     ✓ fails when every model is rate-limited, so callers can fall back honestly
     ✓ disables thinking on 2.5 models for speed
     ✓ rejects a triage answer with a category the admin does not have
-✓ tests/helpdesk.test.ts (115 tests)
+✓ tests/helpdesk.test.ts (121 tests)
   ✓ Test 1: User Login (7)
     ✓ valid credentials create a session for the user and redirect to their tickets
     ✓ IT_SUPPORT is redirected to their assigned queue
@@ -463,6 +570,13 @@ npm run test:watch
     ✓ a user can have at most 10 uploads waiting, and removing one frees a place
     ✓ a user can upload at most 30 files an hour
     ✓ only the uploader can delete an upload, and never once it belongs to a ticket
+  ✓ Test 18: Lifecycle Consistency & Database Constraints (6)
+    ✓ an agent cannot hand a colleague's ticket to someone else without taking it over
+    ✓ an agent can assign an unassigned ticket, and an admin can reassign any open ticket
+    ✓ confirming a resolution twice at once closes the ticket once
+    ✓ reopening twice at once reopens the ticket once
+    ✓ a ticket rated twice at once keeps one rating
+    ✓ the database refuses statuses, priorities, roles and ratings outside the allowed values
 ✓ tests/history.test.ts (14 tests)
   ✓ ticket audit trail (14)
     ✓ stores the event, its data and an English sentence
@@ -540,7 +654,7 @@ smart-helpdesk/
 │   ├── run-ts.js              # Run TypeScript files with plain Node
 │   └── seed.js                # npm run db:seed
 ├── .github/workflows/ci.yml   # Lint, types, tests (PostgreSQL) and build on every push
-├── tests/                     # 149 Vitest tests (5 files)
+├── tests/                     # 155 Vitest tests (5 files)
 ├── AI-USAGE.md                # AI transparency & ethics documentation
 ├── vitest.config.ts           # Vitest configuration
 └── README.md                  # Comprehensive enterprise documentation
@@ -561,7 +675,7 @@ smart-helpdesk/
 | **Bilingual Localization** | Native Arabic (RTL) & English (LTR) language support with persistent cookies/localStorage | ✅ Complete |
 | **Analytics Dashboard** | KPI cards, SLA countdown badges and status chart; the list refreshes every 30s | ✅ Complete |
 | **Drawer Triage Workflow** | Sliding `TicketDrawer` enabling rapid triage and updates without leaving the dashboard | ✅ Complete |
-| **Automated Testing** | 149 unit & integration tests against the real code, all passing | ✅ Complete |
+| **Automated Testing** | 155 unit & integration tests against the real code, all passing | ✅ Complete |
 | **Production Build** | Clean Next.js 16 production build (`npm run build`) with zero TypeScript errors | ✅ Complete |
 
 ---

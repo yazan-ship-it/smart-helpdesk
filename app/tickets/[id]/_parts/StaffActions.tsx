@@ -221,8 +221,8 @@ export default function StaffActions({
         </div>
       )}
 
-      {/* Assign / reassign */}
-      {!isFinished && (
+      {/* Assign / reassign (an agent takes over a colleague's ticket first, above) */}
+      {!isFinished && !isAssignedToPeer && (
         <form onSubmit={handleAssignSubmit} className="space-y-3 pt-2 border-t border-border">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-semibold text-foreground">

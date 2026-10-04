@@ -1442,3 +1442,62 @@ describe('Test 17: Audit Fixes', () => {
     expect(await prisma.attachment.findUnique({ where: { id: pending } })).not.toBeNull()
   })
 })
+
+describe('Test 18: Lifecycle Consistency & Database Constraints', () => {
+  it("an agent cannot hand a colleague's ticket to someone else without taking it over", async () => {
+    const ticketId = await createTestTicket(employeeId, { status: 'IN_PROGRESS', assignedToId: itPeerId })
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect(await assignTicket(ticketId, itSupportId)).toMatchObject({ error: 'assigned_to_other' })
+
+    // Taking it over (logged) makes it theirs, and then they may hand it on
+    expect(await takeOverTicket(ticketId)).toEqual({})
+    expect(await assignTicket(ticketId, itPeerId)).toEqual({})
+    expect((await prisma.ticket.findUnique({ where: { id: ticketId } }))?.assignedToId).toBe(itPeerId)
+  })
+
+  it('an agent can assign an unassigned ticket, and an admin can reassign any open ticket', async () => {
+    const ticketId = await createTestTicket(employeeId)
+    signInAs(itSupportId, 'IT_SUPPORT')
+    expect(await assignTicket(ticketId, itPeerId)).toEqual({})
+    expect((await prisma.ticket.findUnique({ where: { id: ticketId } }))?.status).toBe('ASSIGNED')
+
+    signInAs(adminId, 'ADMIN')
+    expect(await reassignTicket(ticketId, itSupportId)).toEqual({})
+  })
+
+  it('confirming a resolution twice at once closes the ticket once', async () => {
+    const ticketId = await createTestTicket(employeeId, { status: 'RESOLVED', assignedToId: itSupportId })
+    signInAs(employeeId, 'EMPLOYEE')
+    const results = await Promise.all([confirmTicketResolution(ticketId), confirmTicketResolution(ticketId)])
+    expect(results.filter((r) => !r.error)).toHaveLength(1)
+    expect(await prisma.ticketHistory.count({ where: { ticketId, event: 'resolution_confirmed' } })).toBe(1)
+  })
+
+  it('reopening twice at once reopens the ticket once', async () => {
+    const ticketId = await createTestTicket(employeeId, { status: 'CLOSED', assignedToId: itSupportId })
+    signInAs(employeeId, 'EMPLOYEE')
+    const results = await Promise.all([reopenTicket(ticketId, 'Still broken today'), reopenTicket(ticketId, 'Still broken today')])
+    expect(results.filter((r) => !r.error)).toHaveLength(1)
+    expect(await prisma.ticketHistory.count({ where: { ticketId, event: 'reopened' } })).toBe(1)
+  })
+
+  it('a ticket rated twice at once keeps one rating', async () => {
+    const ticketId = await createTestTicket(employeeId, { status: 'RESOLVED', assignedToId: itSupportId })
+    signInAs(employeeId, 'EMPLOYEE')
+    const results = await Promise.all([submitCsatRating(ticketId, 5), submitCsatRating(ticketId, 2)])
+    expect(results.filter((r) => !r.error)).toHaveLength(1)
+    expect(await prisma.ticketHistory.count({ where: { ticketId, event: 'csat_submitted' } })).toBe(1)
+  })
+
+  it('the database refuses statuses, priorities, roles and ratings outside the allowed values', async () => {
+    const ticketId = await createTestTicket(employeeId)
+    await expect(prisma.ticket.update({ where: { id: ticketId }, data: { status: 'ON_HOLD' } })).rejects.toThrow()
+    await expect(prisma.ticket.update({ where: { id: ticketId }, data: { priority: 'URGENT' } })).rejects.toThrow()
+    await expect(prisma.ticket.update({ where: { id: ticketId }, data: { csatRating: 6 } })).rejects.toThrow()
+    await expect(prisma.user.update({ where: { id: employeeId }, data: { role: 'SUPERUSER' } })).rejects.toThrow()
+    await expect(prisma.user.update({ where: { id: employeeId }, data: { accountStatus: 'BANNED' } })).rejects.toThrow()
+    await expect(prisma.appSettings.upsert({ where: { id: 'singleton' }, create: { defaultPriority: 'URGENT' }, update: { defaultPriority: 'URGENT' } })).rejects.toThrow()
+    // Valid values still go through
+    await prisma.ticket.update({ where: { id: ticketId }, data: { priority: 'HIGH' } })
+  })
+})

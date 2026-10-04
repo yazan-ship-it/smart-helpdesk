@@ -203,10 +203,11 @@ export async function reassignTicket(ticketId: string, newAssigneeId: string): P
   const newAssignee = await findAssignee(newAssigneeId)
   if (!newAssignee) return fail('invalid_assignee')
 
-  await prisma.ticket.update({
-    where: { id: ticketId },
+  const { count } = await prisma.ticket.updateMany({
+    where: { id: ticketId, status: ticket.status, assignedToId: ticket.assignedToId },
     data: { assignedToId: newAssignee.id, status: ticket.status === 'OPEN' ? 'ASSIGNED' : ticket.status },
   })
+  if (count === 0) return fail('stale')
 
   await prisma.ticketHistory.create({
     data: {
@@ -258,36 +259,40 @@ export async function assignTicket(ticketId: string, assigneeId: string): Promis
   const session = await getSession()
   if (!session || session.role !== 'IT_SUPPORT') return fail('unauthorized')
 
-  const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } })
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    include: { assignedTo: { select: { id: true, name: true } } },
+  })
   if (!ticket) return fail('not_found')
 
   const currentStatus = ticket.status as Status
   // Allow reassignment even on IN_PROGRESS tickets
   if (isFinished(currentStatus)) return fail('ticket_closed')
 
+  // Same rule as status changes: an agent assigns unassigned tickets or hands on
+  // their own. A colleague's ticket must be taken over first (which is logged).
+  if (ticket.assignedToId && ticket.assignedToId !== session.userId) {
+    return fail('assigned_to_other', { name: ticket.assignedTo?.name ?? '' })
+  }
+
   const assignee = await findAssignee(assigneeId)
   if (!assignee) return fail('invalid_assignee')
 
-  const previousAgent = ticket.assignedToId
-    ? await prisma.user.findUnique({
-        where: { id: ticket.assignedToId },
-        select: { name: true },
-      })
-    : null
-
-  await prisma.ticket.update({
-    where: { id: ticketId },
+  // Only applies if nobody changed the ticket since it was read
+  const { count } = await prisma.ticket.updateMany({
+    where: { id: ticketId, status: currentStatus, assignedToId: ticket.assignedToId },
     data: {
       assignedToId: assignee.id,
       status: currentStatus === 'OPEN' ? 'ASSIGNED' : currentStatus,
     },
   })
+  if (count === 0) return fail('stale')
 
   await prisma.ticketHistory.create({
     data: {
       ticketId,
       userId: session.userId,
-      ...historyData({ type: 'assigned', agent: assignee.name, ...(previousAgent ? { from: previousAgent.name } : {}) }, session.name),
+      ...historyData({ type: 'assigned', agent: assignee.name, ...(ticket.assignedTo ? { from: ticket.assignedTo.name } : {}) }, session.name),
     },
   })
 
@@ -415,13 +420,15 @@ export async function confirmTicketResolution(ticketId: string): Promise<ActionR
   if (session.userId !== ticket.createdById) return fail('forbidden')
   if (ticket.status !== 'RESOLVED') return fail('not_resolved')
 
-  await prisma.ticket.update({
-    where: { id: ticketId },
+  // Only applies if the ticket is still resolved (not closed or reopened meanwhile)
+  const { count } = await prisma.ticket.updateMany({
+    where: { id: ticketId, status: 'RESOLVED' },
     data: {
       status: 'CLOSED',
       ...statusChangeFields(ticket, 'CLOSED'),
     }
   })
+  if (count === 0) return fail('stale')
 
   await prisma.ticketHistory.create({
     data: {
@@ -454,8 +461,9 @@ export async function reopenTicket(ticketId: string, reason: string): Promise<Ac
   const newStatus = ticket.assignedToId ? 'IN_PROGRESS' : 'OPEN'
   const settings = await prisma.appSettings.findUnique({ where: { id: 'singleton' } })
 
-  await prisma.ticket.update({
-    where: { id: ticketId },
+  // Only applies if nobody changed the ticket since it was read (e.g. a double click)
+  const { count } = await prisma.ticket.updateMany({
+    where: { id: ticketId, status: ticket.status, assignedToId: ticket.assignedToId },
     data: {
       status: newStatus,
       ...statusChangeFields(ticket, newStatus),
@@ -463,6 +471,7 @@ export async function reopenTicket(ticketId: string, reason: string): Promise<Ac
       slaDeadline: slaDeadlineFor(ticket.priority, settings),
     }
   })
+  if (count === 0) return fail('stale')
 
   await prisma.ticketHistory.create({
     data: {
@@ -493,13 +502,15 @@ export async function submitCsatRating(ticketId: string, rating: number, feedbac
   if (!isFinished(ticket.status)) return fail('not_resolved')
   if (ticket.csatRating !== null) return fail('already_rated')
 
-  await prisma.ticket.update({
-    where: { id: ticketId },
+  // Rated once: a second submission at the same moment finds csatRating already set
+  const { count } = await prisma.ticket.updateMany({
+    where: { id: ticketId, csatRating: null },
     data: {
       csatRating: rating,
       csatFeedback: text,
     }
   })
+  if (count === 0) return fail('already_rated')
 
   await prisma.ticketHistory.create({
     data: {

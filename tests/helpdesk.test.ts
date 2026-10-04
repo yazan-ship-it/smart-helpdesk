@@ -7,7 +7,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 // Server code reads the session from Next.js cookies; stub it so tests can pick the user.
@@ -51,6 +50,7 @@ import type { ReactElement } from 'react'
 import { NextRequest } from 'next/server'
 import { headers } from 'next/headers'
 import { getSession, createSession, decrypt, type Role, type SessionPayload } from '@/lib/session'
+import { createPrismaClient } from '@/lib/db'
 import { AiNotConfiguredError, isAiConfigured, summarizeTicket, triageTicket, translateText } from '@/lib/gemini'
 import { login, register } from '@/app/actions/auth'
 import {
@@ -83,7 +83,7 @@ import * as authActions from '@/app/actions/auth'
 import { POST as triagePOST } from '@/app/api/ai/triage/route'
 import { POST as summarizePOST } from '@/app/api/ai/summarize/[id]/route'
 
-const prisma = new PrismaClient()
+const prisma = createPrismaClient()
 const storageDir = path.join(os.tmpdir(), `helpdesk-test-uploads-${process.pid}`)
 process.env.STORAGE_DIR = storageDir
 delete process.env.BLOB_READ_WRITE_TOKEN

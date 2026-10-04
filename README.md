@@ -46,7 +46,7 @@ This platform solves these challenges through:
 |---|---|---|
 | **Framework** | Next.js 16.3+ (App Router) | React Server Components (RSC), Turbopack, and Server Actions |
 | **Language** | TypeScript 5 | Strict typing throughout models, APIs, and UI components |
-| **Database & ORM** | Prisma ORM + PostgreSQL (Neon) | Versioned migrations (`prisma/migrations`) and check constraints on roles, statuses and ratings |
+| **Database & ORM** | Prisma ORM 7 (node-postgres adapter) + PostgreSQL (Neon) | Versioned migrations (`prisma/migrations`), check constraints on roles, statuses and ratings; CLI settings in `prisma.config.ts` |
 | **Authentication** | `jose` (JWT) + `bcryptjs` | Stateless encrypted HTTP-only session cookies with 12-round salt hashing |
 | **AI Engine** | Google Gemini via `@google/genai` (`gemini-2.5-flash`, falls back to `gemini-2.5-flash-lite`) | Schema-validated JSON output for triage and summaries; translation |
 | **Styling & Design** | Tailwind CSS + CSS Design Tokens | Clean typography, dark/light adaptive surfaces, and zero-border minimalism |
@@ -285,7 +285,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## ☁️ Deployment (Vercel + Neon)
 
-1. **Database:** create a project on [Neon](https://neon.tech). Copy the *pooled* connection string (host contains `-pooler`) and add `&pgbouncer=true` to it, plus the *direct* one.
+1. **Database:** create a project on [Neon](https://neon.tech). Copy the *pooled* connection string (host contains `-pooler`) and the *direct* one, and change `sslmode=require` to `sslmode=verify-full` in both (checks the server's certificate).
 2. **Vercel project:** import the GitHub repository on [Vercel](https://vercel.com). Vercel runs `npm run vercel-build`, which applies pending migrations and builds. `vercel.json` runs the app in Frankfurt (`fra1`), next to the database; if your Neon project is in another region, change it to match, or every query crosses an ocean.
 3. **Environment variables** (Project → Settings → Environment Variables): `DATABASE_URL` (pooled), `DIRECT_URL` (direct), `SESSION_SECRET`, `GEMINI_API_KEY`, and `DEMO_MODE` if this is a demo.
 4. **Attachments:** Storage → create a **Blob** store with **private** access and connect it to the project (this sets `BLOB_READ_WRITE_TOKEN`).

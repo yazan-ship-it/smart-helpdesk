@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { updateSettings, updateAgentSkills } from '@/app/actions/settings'
 import { Loader2, Save, Layout, Clock, FolderGit2, Sparkles, MessageSquare, Plus, Trash2, X, UserCog } from 'lucide-react'
-import type { AppSettings } from '@prisma/client'
+import type { AppSettings } from '@/lib/generated/prisma/browser'
 import { useTranslation, getPriorityLabel } from '@/lib/i18n'
 import { parseSkills } from '@/lib/skills'
 

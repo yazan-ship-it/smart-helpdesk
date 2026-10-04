@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@/lib/generated/prisma/client'
 import { prisma } from '@/lib/db'
 import { getSession } from '@/lib/session'
 import { resolveAutoAssignment, type DispatchResult } from '@/lib/services/assignment'

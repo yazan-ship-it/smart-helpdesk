@@ -2,15 +2,15 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../lib/generated/prisma"
+  // CommonJS, so plain-Node scripts (scripts/run-ts.js, the seed) can load it too
+  moduleFormat = "cjs"
 }
 
+// Connection strings: prisma.config.ts (CLI, migrations) and lib/db.ts (the app)
 datasource db {
-  provider  = "postgresql"
-  /// Used by the app. On Neon: the pooled connection string
-  url       = env("DATABASE_URL")
-  /// Used by migrations. On Neon: the direct (unpooled) connection string
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 // Roles, statuses and priorities are Strings validated in application code

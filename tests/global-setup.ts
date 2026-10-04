@@ -1,5 +1,5 @@
 import { execSync } from 'child_process'
-import { PrismaClient } from '@prisma/client'
+import { createPrismaClient } from '../lib/db'
 
 /**
  * Runs once before the test files: rebuild the test database from the
@@ -15,12 +15,13 @@ export default async function setup() {
     throw new Error('Refusing to reset TEST_DATABASE_URL: the database name must end in "_test".')
   }
 
-  execSync('npx prisma migrate reset --force --skip-seed --skip-generate', {
+  // Prisma 7: reset no longer seeds or regenerates the client
+  execSync('npx prisma migrate reset --force', {
     stdio: 'inherit',
     env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url },
   })
 
-  const prisma = new PrismaClient({ datasources: { db: { url } } })
+  const prisma = createPrismaClient(url)
   await prisma.appSettings.create({ data: { id: 'singleton' } })
   await prisma.$disconnect()
 }

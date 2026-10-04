@@ -9,7 +9,7 @@ import { getAppSettings, parseCategories } from '@/lib/settings'
 import { sanitizeSkills } from '@/lib/skills'
 import { fail, type ActionResult } from '@/lib/errors'
 import { historyData } from '@/lib/history'
-import type { Prisma } from '@prisma/client'
+import type { Prisma } from '@/lib/generated/prisma/client'
 
 export type AccountStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED' | 'INVITED'
 

@@ -301,6 +301,7 @@ export default function NewTicketClient({ categories, defaultPriority, slaHours,
                   ref={fileInputRef}
                   type="file"
                   multiple
+                  aria-label={t('newTicket.dropFiles')}
                   className="hidden"
                   accept={ACCEPT_ATTRIBUTE}
                   onChange={(e) => uploadFiles(Array.from(e.target.files ?? []))}

@@ -596,6 +596,7 @@ function matchesCategory(ticketCategory: string, filterCategory: string): boolea
  value={search}
  onChange={(e) => setSearch(e.target.value)}
  placeholder={t('ticketList.searchByTitleTicketId')}
+ aria-label={t('ticketList.searchByTitleTicketId')}
  className="w-full bg-transparent text-sm outline-none border-0 ring-0 py-2.5"
  style={{ color: 'var(--text-primary)' }}
  />

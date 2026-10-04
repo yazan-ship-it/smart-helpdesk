@@ -163,6 +163,10 @@ export default function TicketDetailClient({
   const canChangeStatus = currentUserRole === 'IT_SUPPORT'
   // Resolved and closed tickets can't be claimed or reassigned (the server refuses)
   const isFinished = ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'
+  // The reply box says who the reply is for
+  const replyHint = isInternalNote
+    ? 'ticketPage.typePrivateTechnicalNotes'
+    : isITSupport ? 'ticketPage.typeDiagnosticNotesRequesterReply' : 'ticketPage.replyToSupport'
 
   const [isPendingTakeOver, startTransitionTakeOver] = useTransition()
 
@@ -379,6 +383,7 @@ export default function TicketDetailClient({
        value={reopenReason}
        onChange={(e) => setReopenReason(e.target.value)}
        placeholder={t('ticketPage.pleaseDescribeWhyThisIssue')}
+       aria-label={t('ticketPage.pleaseDescribeWhyThisIssue')}
        className="w-full p-3 rounded-xl border border-amber-500/30 bg-background text-sm focus:ring-2 focus:ring-amber-500/20 outline-none"
        rows={3}
      />
@@ -425,6 +430,7 @@ export default function TicketDetailClient({
            value={csatFeedbackText}
            onChange={(e) => setCsatFeedbackText(e.target.value)}
            placeholder={t('ticketPage.optionalFeedback')}
+           aria-label={t('ticketPage.optionalFeedback')}
            className="w-full p-3 rounded-xl border border-indigo-500/30 bg-background text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
            rows={2}
          />
@@ -841,11 +847,8 @@ export default function TicketDetailClient({
  rows={3}
  value={commentText}
  onChange={(e) => setCommentText(e.target.value)}
- placeholder={t(
-    isInternalNote ? 'ticketPage.typePrivateTechnicalNotes'
-    : isITSupport ? 'ticketPage.typeDiagnosticNotesRequesterReply'
-    : 'ticketPage.replyToSupport'
- )}
+ placeholder={t(replyHint)}
+ aria-label={t(replyHint)}
  className={`w-full rounded-xl p-3 text-sm outline-none transition-all focus:ring-2 resize-none ${isInternalNote ? 'bg-amber-500/5 border-amber-500/30 text-amber-900 dark:text-amber-100 placeholder:text-amber-700/50 focus:border-amber-500/60 focus:ring-amber-500/20 hover:border-amber-500/40' : 'bg-background dark:bg-background border border-border text-foreground dark:text-foreground placeholder:text-muted-foreground focus:border-indigo-500/60 focus:ring-indigo-500/20 hover:border-border'}`}
  disabled={isPendingComment}
  onKeyDown={(e) => {
